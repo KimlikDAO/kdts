@@ -1,0 +1,14 @@
+{
+  "name": "@kimlikdao/kdts-linux",
+  "description": "Native Linux compiler for @kimlikdao/kdts",
+  "files": [
+    "compiler"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "preferUnplugged": true
+}

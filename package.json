@@ -2,7 +2,7 @@
   "name": "@kimlikdao/kdts",
   "description": "KimlikDAO TypeScript compiler",
   "author": "KimlikDAO <dao@kimlikdao.org>",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "license": "MIT",
   "keywords": [
     "typescript",
@@ -29,15 +29,25 @@
   "types": "./kdts.d.ts",
   "scripts": {
     "postinstall": "bun ./scripts/postinstall.ts",
+    "install:graal": "bun ./scripts/installGraal.ts",
     "build:local": "bun ./scripts/build.ts --local",
+    "build:compiler": "bun ./scripts/build.ts --compiler-only",
+    "build:native": "bun ./scripts/build.ts --native-only",
     "build": "bun ./scripts/build.ts",
-    "release": "npm run build && npm publish ./build"
+    "publish:packages": "bun ./scripts/publish.ts",
+    "release": "bun ./scripts/publish.ts"
   },
   "dependencies": {
     "@swc/core": "^1.15.30",
     "acorn": "^8.16.0",
-    "google-closure-compiler": "^20260420.0.0",
+    "google-closure-compiler": "^20260421.0.0",
     "uglify-js": "3.19.3"
+  },
+  "optionalDependencies": {
+    "@kimlikdao/kdts-linux": "file:native/linux",
+    "@kimlikdao/kdts-linux-arm64": "file:native/linux-arm64",
+    "@kimlikdao/kdts-macos": "file:native/macos",
+    "@kimlikdao/kdts-windows": "file:native/windows"
   },
   "devDependencies": {
     "@types/bun": "^1.3.13"

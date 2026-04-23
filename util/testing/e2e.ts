@@ -1,5 +1,6 @@
-import { file, spawn } from "bun";
-import { rmSync } from "node:fs";
+import { file } from "bun";
+import { spawn } from "node:child_process";
+import { closeSync, openSync, readFileSync, rmSync } from "node:fs";
 import { basename, join } from "node:path";
 import process from "node:process";
 import { compile } from "../../compiler";
@@ -33,20 +34,31 @@ const compileEntry = async (entry: string): Promise<CompileE2EResult> => {
     output,
     writtenCode,
     cleanup: () => rmSync(dir, { force: true, recursive: true }),
-    run: async () => {
-      const proc = spawn({
-        cmd: [process.execPath, output],
+    run: () => new Promise<RunResult>((resolve, reject) => {
+      const stdoutPath = join(dir, "stdout.txt");
+      const stderrPath = join(dir, "stderr.txt");
+      const stdoutFd = openSync(stdoutPath, "w");
+      const stderrFd = openSync(stderrPath, "w");
+      const proc = spawn("node", [output], {
         cwd: process.cwd(),
-        stdout: "pipe",
-        stderr: "pipe",
+        stdio: ["ignore", stdoutFd, stderrFd],
       });
-      const [stdout, stderr, exitCode] = await Promise.all([
-        (proc.stdout as unknown as Response).text(),
-        (proc.stderr as unknown as Response).text(),
-        proc.exited,
-      ]);
-      return { exitCode, stdout, stderr };
-    },
+
+      proc.on("error", (error) => {
+        closeSync(stdoutFd);
+        closeSync(stderrFd);
+        reject(error);
+      });
+      proc.on("close", (code) => {
+        closeSync(stdoutFd);
+        closeSync(stderrFd);
+        resolve({
+          exitCode: code ?? 1,
+          stdout: readFileSync(stdoutPath, "utf8"),
+          stderr: readFileSync(stderrPath, "utf8"),
+        });
+      });
+    }),
   };
 };
 

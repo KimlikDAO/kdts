@@ -1,0 +1,4 @@
+[submodule "vendor/gcc"]
+	path = vendor/gcc
+	url = https://github.com/KimlikDAO/gcc
+	branch = kdts

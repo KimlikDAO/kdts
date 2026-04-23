@@ -1,0 +1,175 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  compiler_jar:
+    name: compiler jar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: oven-sh/setup-bun@v2
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+      - run: bun run build:compiler
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compiler-jar
+          path: build/compiler/compiler.jar
+
+  build_kdts:
+    name: build kdts
+    needs: compiler_jar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiler-jar
+          path: build/compiler
+      - run: |
+          bun i
+          bun run build -- --compiler-jar build/compiler/compiler.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kdts
+          path: build/kdts
+
+  build_macos:
+    name: build kdts-macos
+    needs: compiler_jar
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm
+          java-version: "21"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiler-jar
+          path: build/compiler
+      - run: bun run build:native -- --compiler-jar build/compiler/compiler.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kdts-macos
+          path: build/kdts-macos
+
+  build_linux:
+    name: build kdts-linux
+    needs: compiler_jar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm
+          java-version: "21"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiler-jar
+          path: build/compiler
+      - run: bun run build:native -- --compiler-jar build/compiler/compiler.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kdts-linux
+          path: build/kdts-linux
+
+  build_linux_arm64:
+    name: build kdts-linux-arm64
+    needs: compiler_jar
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm
+          java-version: "21"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiler-jar
+          path: build/compiler
+      - run: bun run build:native -- --compiler-jar build/compiler/compiler.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kdts-linux-arm64
+          path: build/kdts-linux-arm64
+
+  build_windows:
+    name: build kdts-windows
+    needs: compiler_jar
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm
+          java-version: "21"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiler-jar
+          path: build/compiler
+      - run: bun run build:native -- --compiler-jar build/compiler/compiler.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kdts-windows
+          path: build/kdts-windows
+
+  publish:
+    name: publish packages
+    needs:
+      - build_kdts
+      - build_linux
+      - build_linux_arm64
+      - build_macos
+      - build_windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - uses: actions/download-artifact@v4
+        with:
+          name: kdts
+          path: build/kdts
+      - uses: actions/download-artifact@v4
+        with:
+          name: kdts-linux
+          path: build/kdts-linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: kdts-linux-arm64
+          path: build/kdts-linux-arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: kdts-macos
+          path: build/kdts-macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: kdts-windows
+          path: build/kdts-windows
+      - run: bun run publish:packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

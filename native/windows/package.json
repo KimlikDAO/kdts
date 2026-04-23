@@ -1,0 +1,14 @@
+{
+  "name": "@kimlikdao/kdts-windows",
+  "description": "Native Windows compiler for @kimlikdao/kdts",
+  "files": [
+    "compiler.exe"
+  ],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "preferUnplugged": true
+}

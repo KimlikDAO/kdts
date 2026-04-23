@@ -16,3 +16,25 @@ jobs:
       - run: |
           bun i
           bun test
+
+  bazel_bun_tests:
+    name: bun tests (bazel)
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+      - run: |
+          bun i
+          bun run build:compiler
+          bun test

@@ -1,56 +1,72 @@
-import { spawn } from "bun";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DiskProgram } from "../model/program";
+import {
+  getNativeCompilerFile,
+  getNativeCompilerPackage,
+  getNativeCompilerPackageName,
+  getStockCompilerPackageName,
+} from "./nativePackages";
 
-const NodeModulesDirs = [
-  "node_modules",
-  "node_modules/.bun/node_modules",
-  "kdts/node_modules",
-  "kdts/node_modules/.bun/node_modules",
-  "node_modules/google-closure-compiler/node_modules",
-];
 const JavaRuntimeArgs = [
   "-XX:+IgnoreUnrecognizedVMOptions",
   "--sun-misc-unsafe-memory-access=allow",
 ];
 
-const resolveInstalledPath = (
-  packagePath: string,
-): string | void => {
-  for (const dir of NodeModulesDirs) {
-    const installedPath = resolve(`${dir}/${packagePath}`);
-    if (existsSync(installedPath))
-      return installedPath;
+type Executable = {
+  cmd: string[];
+  platform: "native" | "java";
+};
+
+const findFile = (...paths: (string | null)[]): string | null =>
+  paths.find((path): path is string => !!path && existsSync(path)) || null;
+
+const findPackage = (path: string): string | null => {
+  try {
+    return fileURLToPath(import.meta.resolve(path));
+  } catch {
+    return null;
   }
 };
 
-const getNativeImagePath = (
+const fromModule = (path: string): string =>
+  fileURLToPath(new URL(path, import.meta.url));
+
+const getNativeExecutable = (
   platform = process.platform,
   arch = process.arch,
-): string | void => {
-  let compilerPackage = "";
-  if (platform == "darwin")
-    compilerPackage = "google-closure-compiler-macos";
-  else if (platform == "win32")
-    compilerPackage = "google-closure-compiler-windows";
-  else if (platform == "linux")
-    compilerPackage = arch == "arm64"
-      ? "google-closure-compiler-linux-arm64"
-      : "google-closure-compiler-linux";
-  else
-    return;
+): Executable | null => {
+  const nativePackage = getNativeCompilerPackage(platform, arch);
+  if (!nativePackage)
+    return null;
 
-  return resolveInstalledPath(
-    `${compilerPackage}/${platform == "win32" ? "compiler.exe" : "compiler"}`,
+  const compilerFile = getNativeCompilerFile(nativePackage);
+  const nativeImagePath = findPackage(
+    `${getNativeCompilerPackageName(nativePackage)}/${compilerFile}`,
+  ) || findPackage(
+    `${getStockCompilerPackageName(nativePackage)}/${compilerFile}`,
   );
+  if (!nativeImagePath)
+    return null;
+
+  return {
+    cmd: [nativeImagePath],
+    platform: "native",
+  };
 };
 
-const getJavaJarPath = (): string => {
-  const javaJarPath = resolveInstalledPath("google-closure-compiler-java/compiler.jar");
+const getJavaExecutable = (): Executable => {
+  const javaJarPath = findFile(
+    fromModule("./compiler.jar"),
+    fromModule("../vendor/gcc/bazel-bin/compiler_uberjar_deploy.jar"),
+    findPackage("google-closure-compiler-java/compiler.jar"),
+  );
   if (!javaJarPath)
     throw new Error("No Closure Compiler jar found in node_modules.");
-  return javaJarPath;
+  return {
+    cmd: ["java", ...JavaRuntimeArgs, "-jar", javaJarPath],
+    platform: "java",
+  };
 };
 
 const createCompilerArgs = (
@@ -70,7 +86,7 @@ const createCompilerArgs = (
     "--chunk_output_type=ES_MODULES",
     "--module_resolution=NODE",
     "--dependency_mode=PRUNE",
-    "--jscomp_off=boundedGenerics"
+    "--jscomp_off=boundedGenerics",
   );
 
   for (const error of params.jsCompErrors)
@@ -86,28 +102,16 @@ const createCompilerArgs = (
 const createClosureCompilerCommand = (
   program: DiskProgram,
   params: ClosureCompilerParams,
-): {
-  cmd: string[];
-  platform: "native" | "java";
-} => {
-  const args = createCompilerArgs(program, params);
-  const nativeImagePath = getNativeImagePath();
-  if (nativeImagePath)
-    return {
-      cmd: [nativeImagePath, ...args],
-      platform: "native"
-    };
-  const javaJarPath = getJavaJarPath()
-  return {
-    cmd: ["java", ...JavaRuntimeArgs, "-jar", javaJarPath, ...args],
-    platform: "java"
-  };
+): Executable => {
+  const exec = getNativeExecutable() || getJavaExecutable();
+  exec.cmd.push(...createCompilerArgs(program, params));
+  return exec;
 };
 
 type ClosureCompilerParams = {
   jsCompErrors: string[];
   jsCompWarnings: string[];
-}
+};
 
 const compileWithClosureCompiler = async (
   program: DiskProgram,
@@ -121,17 +125,14 @@ const compileWithClosureCompiler = async (
   );
   console.info("GCC platform:  ", platform);
 
-  const proc = spawn({
+  const proc = Bun.spawnSync({
     cmd,
     cwd: program.isolateDir,
-    stdout: "pipe",
-    stderr: "pipe",
+    stdout: "pipe"
   });
-  const [output, errors, exitCode] = await Promise.all([
-    (proc.stdout as unknown as Response).text(),
-    (proc.stderr as unknown as Response).text(),
-    proc.exited
-  ]);
+  const output = proc.stdout.toString();
+  const errors = proc.stderr.toString();
+  const exitCode = proc.exitCode;
 
   if (exitCode || errors)
     throw `${cmd.join(" ")}\n\n${errors || exitCode}\n\n`;
@@ -141,6 +142,6 @@ const compileWithClosureCompiler = async (
 export {
   compileWithClosureCompiler,
   createClosureCompilerCommand,
-  getJavaJarPath,
-  getNativeImagePath
+  getJavaExecutable,
+  getNativeExecutable
 };

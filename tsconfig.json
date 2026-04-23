@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "allowArbitraryExtensions": true,
+    "baseUrl": ".",
     "target": "esnext",
     "module": "esnext",
     "lib": [
@@ -24,6 +25,11 @@
     "noUncheckedIndexedAccess": false,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "paths": {
+      "uglify-js": [
+        "./@types/uglify-js"
+      ]
+    },
     "skipLibCheck": true,
     "strict": true,
     "strictNullChecks": true,
@@ -37,6 +43,8 @@
     "./**/*.tsx"
   ],
   "exclude": [
+    "@types/**",
+    "vendor/**",
     "**/node_modules",
     "**/.kdts_isolate",
     "**/build",

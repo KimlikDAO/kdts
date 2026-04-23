@@ -1,4 +1,5 @@
 build/
+.cache/
 *.lock
 node_modules/
 .kdts_isolate
