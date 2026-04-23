@@ -3,7 +3,11 @@ import { combine, getDir, replaceExt } from "../util/paths";
 import { SourceId, Source } from "../model/source";
 import { JsLikeExt, moduleAtPath } from "./sourcePath";
 
-const KDTS_TYPES = "node_modules/@kimlikdao/kdts/@types";
+const PackageRoots = [
+  "@types",
+  "node_modules/@kimlikdao/kdts/@types",
+  "node_modules"
+] as const;
 
 type PackageJson = {
   main?: string;
@@ -58,12 +62,11 @@ const resolveRootImport = (packageDir: string, packageJson: PackageJson): string
   return resolveDeclaration(combine(packageDir, declarationPath));
 }
 
-const resolvePackage = (
-  modulesPath: string,
-  packagePath: string
+const resolvePackageFrom = (
+  packageDir: string,
+  packageName: string,
+  subpath: string
 ): string => {
-  const [packageName, subpath] = splitPackagePath(packagePath);
-  const packageDir = combine(modulesPath, packageName);
   if (!existsSync(packageDir))
     return "";
 
@@ -72,9 +75,24 @@ const resolvePackage = (
     throw Error(`Package ${packageName} is missing package.json`);
 
   const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as PackageJson;
-  return subpath
+  const path = subpath
     ? resolveDeclaration(combine(packageDir, subpath.slice(1)))
     : resolveRootImport(packageDir, packageJson);
+  return path.startsWith("@") ? "./" + path : path;
+}
+
+const resolvePackage = (packagePath: string): string => {
+  const [packageName, subpath] = splitPackagePath(packagePath);
+  for (const packageRoot of PackageRoots) {
+    const resolvedPath = resolvePackageFrom(
+      combine(packageRoot, packageName),
+      packageName,
+      subpath
+    );
+    if (resolvedPath)
+      return resolvedPath;
+  }
+  return "";
 }
 
 const resolvePath = (importer: string, path: string): Source => {
@@ -86,11 +104,9 @@ const resolvePath = (importer: string, path: string): Source => {
     default:
       const packagePath = path;
       const id: SourceId = `package:${packagePath}`;
-      for (const nodeModulesPath of [KDTS_TYPES, "node_modules"]) {
-        const resolvedPath = resolvePackage(nodeModulesPath, packagePath);
-        if (resolvedPath)
-          return { path: resolvedPath, id };
-      }
+      const resolvedPath = resolvePackage(packagePath);
+      if (resolvedPath)
+        return { path: resolvedPath, id };
       throw Error(`No types for package ${packagePath} found!`);
   }
 }
