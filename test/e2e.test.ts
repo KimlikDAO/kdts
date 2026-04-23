@@ -1,21 +1,42 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
+  symlinkSync,
   writeFileSync
 } from "node:fs";
-import { relative } from "node:path";
-import { fileURLToPath } from "node:url";
 import { combine, replaceExt } from "../util/paths";
 import { compile } from "../compiler";
 import { compileEntry } from "../util/testing/e2e";
 
+const SelfPackageDir = "node_modules/@kimlikdao/kdts";
+let createdSelfPackage = false;
+
+beforeAll(() => {
+  if (existsSync(SelfPackageDir))
+    return;
+
+  mkdirSync(SelfPackageDir, { recursive: true });
+  writeFileSync(combine(SelfPackageDir, "package.json"), JSON.stringify({
+    name: "@kimlikdao/kdts",
+    types: "./kdts.d.ts"
+  }, null, 2) + "\n");
+  symlinkSync("../../../kdts.d.ts", combine(SelfPackageDir, "kdts.d.ts"));
+  symlinkSync("../../../@types", combine(SelfPackageDir, "@types"));
+  createdSelfPackage = true;
+});
+
+afterAll(() => {
+  if (!createdSelfPackage)
+    return;
+  rmSync(SelfPackageDir, { force: true, recursive: true });
+});
+
 test("compile API compiles a.ts and emitted output runs", async () => {
-  const entry = relative(
-    process.cwd(),
-    fileURLToPath(new URL("../showcase/dogCage.ts", import.meta.url))
-  );
+  const entry = "showcase/dogCage.ts";
   const compiled = await compileEntry(entry);
 
   try {
@@ -46,17 +67,14 @@ test("compile API restores exported entry bindings as esm exports", async () => 
   expect(code).not.toContain("kdts_exports");
   expect(writtenCode).not.toContain("__kdts_export__");
 
-  const mod = await import(new URL("../../" + output, import.meta.url).href);
+  const mod = await import("../build/exports.out.js");
   expect(mod.default).toBe(7);
   expect(mod.answer).toBe(42);
 });
 
 test("compile API builds every showcase file", async () => {
   mkdirSync("build", { recursive: true });
-  const showcaseDir = relative(
-    process.cwd(),
-    fileURLToPath(new URL("../showcase", import.meta.url))
-  );
+  const showcaseDir = "showcase";
   const showcaseEntries = readdirSync(showcaseDir)
     .filter((fileName) => fileName.endsWith(".ts") && !fileName.endsWith(".d.ts"))
     .sort();

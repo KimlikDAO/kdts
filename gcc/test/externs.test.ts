@@ -6,11 +6,11 @@ const expectEmit = harness(transpileDts);
 
 test("externs serialize type-only imports as alias imports", () => {
   expectEmit(`
-    import { LargeConstant as Marker } from "/kdts/kdts.d.ts";
+    import { LargeConstant as Marker } from "./kdts.d.ts";
   `, `
     /** @fileoverview @externs */
     /** @const */
-    const Marker = kdts$$module$kdts$kdts_d$LargeConstant;
+    const Marker = kdts$$module$kdts_d$LargeConstant;
 
   `);
 });

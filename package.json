@@ -2,7 +2,7 @@
   "name": "@kimlikdao/kdts",
   "description": "KimlikDAO TypeScript compiler",
   "author": "KimlikDAO <dao@kimlikdao.org>",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "license": "MIT",
   "keywords": [
     "typescript",
@@ -15,12 +15,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KimlikDAO/kimlikdao-lib.git",
+    "url": "git+https://github.com/KimlikDAO/kdts.git",
     "directory": "kdts"
   },
   "homepage": "https://docs.kimlikdao.org/kdts",
   "bugs": {
-    "url": "https://github.com/KimlikDAO/kimlikdao-lib/issues"
+    "url": "https://github.com/KimlikDAO/kdts/issues"
   },
   "type": "module",
   "engines": {

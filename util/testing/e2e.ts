@@ -1,8 +1,9 @@
 import { file, spawn } from "bun";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { basename, join } from "node:path";
 import process from "node:process";
 import { compile } from "../../compiler";
+import { createBuildTempDir } from "./temp";
 
 type RunResult = {
   exitCode: number;
@@ -19,8 +20,7 @@ type CompileE2EResult = {
 };
 
 const compileEntry = async (entry: string): Promise<CompileE2EResult> => {
-  mkdirSync("tmp", { recursive: true });
-  const dir = mkdtempSync("tmp/kdts-e2e-");
+  const dir = createBuildTempDir("kdts-e2e");
   const output = join(dir, basename(entry).replace(/\.ts$/, ".out.js"));
   const code = await compile({ target: [entry], output, strict: true });
   if (typeof code != "string")

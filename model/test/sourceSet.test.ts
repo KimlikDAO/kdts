@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { combine } from "../../util/paths";
+import { createBuildTempDir } from "../../util/testing/temp";
 import { SourceSet } from "../../frontend/sourceSet";
 import { Source } from "../source";
 
@@ -62,8 +63,7 @@ test("getPaths returns all resolved paths in sorted order", () => {
 });
 
 test("materialize tracks sources and writes them to the isolate", async () => {
-  mkdirSync("tmp", { recursive: true });
-  const dir = mkdtempSync("tmp/source-set-");
+  const dir = createBuildTempDir("source-set");
   const isolateDir = combine(dir, ".kdts_isolate");
   const sourcePath = combine(dir, "entry.ts");
 

@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
 import { combine } from "../../util/paths";
+import { createBuildTempDir } from "../../util/testing/temp";
 import { GccProgram } from "../gccProgram";
 
 test("plain entries stay unchanged", async () => {
-  mkdirSync("tmp", { recursive: true });
-  const dir = mkdtempSync("tmp/gcc-program-");
+  const dir = createBuildTempDir("gcc-program");
   const isolateDir = combine(dir, ".kdts_isolate");
   const entryPath = combine(dir, "entry.ts");
   const entry = relative(process.cwd(), entryPath);
@@ -24,8 +24,7 @@ test("plain entries stay unchanged", async () => {
 });
 
 test("exported entries materialize a sibling extern file", async () => {
-  mkdirSync("tmp", { recursive: true });
-  const dir = mkdtempSync("tmp/gcc-program-");
+  const dir = createBuildTempDir("gcc-program");
   const isolateDir = combine(dir, ".kdts_isolate");
   const entryPath = combine(dir, "entry.ts");
   const entry = relative(process.cwd(), entryPath);

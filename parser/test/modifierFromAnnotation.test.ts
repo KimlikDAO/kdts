@@ -1,7 +1,24 @@
+import { Node } from "acorn";
 import { expect, test } from "bun:test";
 import { Modifier } from "../../model/modifier";
 import { modifiersFromJsDoc } from "../jsdocParser";
 import { parseSource } from "./utils";
+
+type NodeWithModifiers<TNode extends Node> = TNode & { modifiers?: Modifier };
+
+function expectNodeType<
+  TNode extends { type: string } | null | undefined,
+  TType extends NonNullable<TNode>["type"]
+>(
+  node: TNode,
+  type: TType
+): asserts node is Extract<NonNullable<TNode>, { type: TType }> {
+  expect(node?.type).toBe(type);
+}
+
+function withModifiers<TNode extends Node>(node: TNode): NodeWithModifiers<TNode> {
+  return node as NodeWithModifiers<TNode>;
+}
 
 test("modifier from JSDoc attaches to statement-level VariableDeclaration, not nested one", () => {
   const ast = parseSource(`
@@ -14,14 +31,18 @@ test("modifier from JSDoc attaches to statement-level VariableDeclaration, not n
     };
   `);
   const stmt = ast.body[0];
-  expect(stmt.type).toBe("VariableDeclaration");
+  expectNodeType(stmt, "VariableDeclaration");
+  expectNodeType(stmt.declarations[0].id, "Identifier");
   expect(stmt.declarations[0].id.name).toBe("triple");
-  expect(stmt.modifiers).toBe(Modifier.Pure);
+  expect(withModifiers(stmt).modifiers).toBe(Modifier.Pure);
+  expectNodeType(stmt.declarations[0].init, "ArrowFunctionExpression");
+  expectNodeType(stmt.declarations[0].init.body, "BlockStatement");
   const innerBlock = stmt.declarations[0].init.body.body;
   const doubleDecl = innerBlock[0];
-  expect(doubleDecl.type).toBe("VariableDeclaration");
+  expectNodeType(doubleDecl, "VariableDeclaration");
+  expectNodeType(doubleDecl.declarations[0].id, "Identifier");
   expect(doubleDecl.declarations[0].id.name).toBe("double");
-  expect(doubleDecl.modifiers).toBe(Modifier.Pure);
+  expect(withModifiers(doubleDecl).modifiers).toBe(Modifier.Pure);
 });
 
 test("Function modifiers attach on ArrowFunctionExpressions", () => {
@@ -29,12 +50,12 @@ test("Function modifiers attach on ArrowFunctionExpressions", () => {
     f(P, /** @satisfies {PureFn} */ () => {});
   `);
   const stmt = ast.body[0];
-  expect(stmt.type).toBe("ExpressionStatement");
+  expectNodeType(stmt, "ExpressionStatement");
   const call = stmt.expression;
-  expect(call.type).toBe("CallExpression");
+  expectNodeType(call, "CallExpression");
   const innerFn = call.arguments[1];
-  expect(innerFn.type).toBe("ArrowFunctionExpression");
-  expect(innerFn.modifiers).toBe(Modifier.Pure);
+  expectNodeType(innerFn, "ArrowFunctionExpression");
+  expect(withModifiers(innerFn).modifiers).toBe(Modifier.Pure);
 });
 
 test("modifiersFromJsDoc ORs @satisfies entries and ignores unknown modifiers", () => {
@@ -56,9 +77,9 @@ test("Inline modifiers attach on FunctionDeclarations", () => {
     }
   `);
   const stmt = ast.body[0];
-  expect(stmt.type).toBe("FunctionDeclaration");
+  expectNodeType(stmt, "FunctionDeclaration");
   expect(stmt.id.name).toBe("arr");
-  expect(stmt.modifiers).toBe(Modifier.Inline);
+  expect(withModifiers(stmt).modifiers).toBe(Modifier.Inline);
 });
 
 test("multiple @satisfies tags accumulate on the parsed node", () => {
@@ -70,8 +91,8 @@ test("multiple @satisfies tags accumulate on the parsed node", () => {
     const run = () => 1;
   `);
   const stmt = ast.body[0];
-  expect(stmt.type).toBe("VariableDeclaration");
-  expect(stmt.modifiers).toBe(
+  expectNodeType(stmt, "VariableDeclaration");
+  expect(withModifiers(stmt).modifiers).toBe(
     Modifier.Deterministic | Modifier.Inline | Modifier.InlineFriendly
   );
 });
@@ -84,12 +105,12 @@ test("Function modifiers attach on parenthesized destructuring ArrowFunctionExpr
     );
   `);
   const stmt = ast.body[0];
-  expect(stmt.type).toBe("ExpressionStatement");
+  expectNodeType(stmt, "ExpressionStatement");
   const call = stmt.expression;
-  expect(call.type).toBe("CallExpression");
+  expectNodeType(call, "CallExpression");
   const innerFn = call.arguments[0];
-  expect(innerFn.type).toBe("ArrowFunctionExpression");
-  expect(innerFn.modifiers).toBe(Modifier.Pure);
-  expect(innerFn.params[0].type).toBe("ObjectPattern");
-  expect(innerFn.params[0].modifiers).toBeUndefined();
+  expectNodeType(innerFn, "ArrowFunctionExpression");
+  expect(withModifiers(innerFn).modifiers).toBe(Modifier.Pure);
+  expectNodeType(innerFn.params[0], "ObjectPattern");
+  expect(withModifiers(innerFn.params[0]).modifiers).toBeUndefined();
 });
