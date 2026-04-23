@@ -1,39 +1,13 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import {
-  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
-  rmSync,
-  symlinkSync,
   writeFileSync
 } from "node:fs";
 import { combine, replaceExt } from "../util/paths";
 import { compile } from "../compiler";
 import { compileEntry } from "../util/testing/e2e";
-
-const SelfPackageDir = "node_modules/@kimlikdao/kdts";
-let createdSelfPackage = false;
-
-beforeAll(() => {
-  if (existsSync(SelfPackageDir))
-    return;
-
-  mkdirSync(SelfPackageDir, { recursive: true });
-  writeFileSync(combine(SelfPackageDir, "package.json"), JSON.stringify({
-    name: "@kimlikdao/kdts",
-    types: "./kdts.d.ts"
-  }, null, 2) + "\n");
-  symlinkSync("../../../kdts.d.ts", combine(SelfPackageDir, "kdts.d.ts"));
-  symlinkSync("../../../@types", combine(SelfPackageDir, "@types"));
-  createdSelfPackage = true;
-});
-
-afterAll(() => {
-  if (!createdSelfPackage)
-    return;
-  rmSync(SelfPackageDir, { force: true, recursive: true });
-});
 
 test("compile API compiles a.ts and emitted output runs", async () => {
   const entry = "showcase/dogCage.ts";
@@ -67,7 +41,7 @@ test("compile API restores exported entry bindings as esm exports", async () => 
   expect(code).not.toContain("kdts_exports");
   expect(writtenCode).not.toContain("__kdts_export__");
 
-  const mod = await import("../build/exports.out.js");
+  const mod = await import("../" + output);
   expect(mod.default).toBe(7);
   expect(mod.answer).toBe(42);
 });
