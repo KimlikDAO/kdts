@@ -3,7 +3,7 @@
 import process from "node:process";
 import { CliArgs } from "./util/cli";
 import { compile } from "./compiler";
-import pkg from "./package.json";
+import pkg from "../package.json";
 import { run } from "./runner";
 import { Overridable } from "./kdts.d";
 

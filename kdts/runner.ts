@@ -67,7 +67,7 @@ const run = (args: CliArgs) => {
   args = normalizeCompileArgs(args);
   const include = getIncludes(args.asList("target"));
   const exclude = getExcludes(
-    ["build/", "node_modules/"].concat(args.asList("filter")));
+    ["build/", "gcc/", "node_modules/"].concat(args.asList("filter")));
   const command = include.includes(".test.") ? "bun test" : "bun";
 
   console.info(`Target: ${include} (filtering: ${exclude})`);

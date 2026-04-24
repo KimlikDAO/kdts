@@ -10,25 +10,37 @@ jobs:
   compiler_jar:
     name: compiler jar
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
       - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - uses: bazel-contrib/setup-bazel@0.15.0
         with:
           bazelisk-cache: true
           repository-cache: true
-      - run: bun run build:compiler
+      - run: |
+          unset ANDROID_HOME
+          unset ANDROID_SDK_ROOT
+          bun run build:compiler
       - uses: actions/upload-artifact@v4
         with:
           name: compiler-jar
           path: build/compiler/compiler.jar
+          if-no-files-found: error
 
   build_kdts:
     name: build kdts
     needs: compiler_jar
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
@@ -37,25 +49,29 @@ jobs:
           name: compiler-jar
           path: build/compiler
       - run: |
-          bun i
+          bun install --frozen-lockfile
           bun run build -- --compiler-jar build/compiler/compiler.jar
       - uses: actions/upload-artifact@v4
         with:
           name: kdts
           path: build/kdts
+          if-no-files-found: error
 
   build_macos:
-    name: build kdts-macos
+    name: build gcc-macos
     needs: compiler_jar
-    runs-on: macos-latest
+    runs-on: macos-14
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - uses: graalvm/setup-graalvm@v1
         with:
-          distribution: graalvm
+          distribution: graalvm-community
           java-version: "21"
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: "true"
       - uses: actions/download-artifact@v4
         with:
           name: compiler-jar
@@ -63,21 +79,55 @@ jobs:
       - run: bun run build:native -- --compiler-jar build/compiler/compiler.jar
       - uses: actions/upload-artifact@v4
         with:
-          name: kdts-macos
-          path: build/kdts-macos
+          name: gcc-macos
+          path: build/gcc-macos
+          if-no-files-found: error
 
   build_linux:
-    name: build kdts-linux
+    name: build gcc-linux
     needs: compiler_jar
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      MUSL_HOME: ${{ github.workspace }}/musl-toolchain
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: kraj/musl
+          ref: c47ad25ea3b484e10326f933e927c0bc8cded3da
+          path: musl
+          clean: false
+      - uses: actions/checkout@v6
+        with:
+          repository: madler/zlib
+          ref: 04f42ceca40f73e2978b50e93806c2a18c1281fc
+          path: zlib
+          clean: false
+      - run: |
+          pushd musl
+          ./configure --prefix="$MUSL_HOME" --static
+          sudo make
+          make install
+          popd
+
+          ln -s "$MUSL_HOME/bin/musl-gcc" "$MUSL_HOME/bin/x86_64-linux-musl-gcc"
+          echo "$MUSL_HOME/bin" >> "$GITHUB_PATH"
+          x86_64-linux-musl-gcc --version
+
+          pushd zlib
+          CC=musl-gcc ./configure --prefix="$MUSL_HOME" --static
+          make
+          make install
+          popd
       - uses: oven-sh/setup-bun@v2
       - uses: graalvm/setup-graalvm@v1
         with:
-          distribution: graalvm
+          distribution: graalvm-community
           java-version: "21"
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: "true"
       - uses: actions/download-artifact@v4
         with:
           name: compiler-jar
@@ -85,21 +135,25 @@ jobs:
       - run: bun run build:native -- --compiler-jar build/compiler/compiler.jar
       - uses: actions/upload-artifact@v4
         with:
-          name: kdts-linux
-          path: build/kdts-linux
+          name: gcc-linux
+          path: build/gcc-linux
+          if-no-files-found: error
 
   build_linux_arm64:
-    name: build kdts-linux-arm64
+    name: build gcc-linux-arm64
     needs: compiler_jar
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - uses: graalvm/setup-graalvm@v1
         with:
-          distribution: graalvm
+          distribution: graalvm-community
           java-version: "21"
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: "true"
       - uses: actions/download-artifact@v4
         with:
           name: compiler-jar
@@ -107,21 +161,25 @@ jobs:
       - run: bun run build:native -- --compiler-jar build/compiler/compiler.jar
       - uses: actions/upload-artifact@v4
         with:
-          name: kdts-linux-arm64
-          path: build/kdts-linux-arm64
+          name: gcc-linux-arm64
+          path: build/gcc-linux-arm64
+          if-no-files-found: error
 
   build_windows:
-    name: build kdts-windows
+    name: build gcc-windows
     needs: compiler_jar
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - uses: graalvm/setup-graalvm@v1
         with:
-          distribution: graalvm
+          distribution: graalvm-community
           java-version: "21"
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: "true"
       - uses: actions/download-artifact@v4
         with:
           name: compiler-jar
@@ -129,8 +187,9 @@ jobs:
       - run: bun run build:native -- --compiler-jar build/compiler/compiler.jar
       - uses: actions/upload-artifact@v4
         with:
-          name: kdts-windows
-          path: build/kdts-windows
+          name: gcc-windows
+          path: build/gcc-windows
+          if-no-files-found: error
 
   publish:
     name: publish packages
@@ -156,20 +215,25 @@ jobs:
           path: build/kdts
       - uses: actions/download-artifact@v4
         with:
-          name: kdts-linux
-          path: build/kdts-linux
+          name: gcc-linux
+          path: build/gcc-linux
       - uses: actions/download-artifact@v4
         with:
-          name: kdts-linux-arm64
-          path: build/kdts-linux-arm64
+          name: gcc-linux-arm64
+          path: build/gcc-linux-arm64
       - uses: actions/download-artifact@v4
         with:
-          name: kdts-macos
-          path: build/kdts-macos
+          name: gcc-macos
+          path: build/gcc-macos
       - uses: actions/download-artifact@v4
         with:
-          name: kdts-windows
-          path: build/kdts-windows
+          name: gcc-windows
+          path: build/gcc-windows
+      - run: |
+          chmod 755 build/gcc-linux/compiler
+          chmod 755 build/gcc-linux-arm64/compiler
+          chmod 755 build/gcc-macos/compiler
+          chmod 755 build/gcc-windows/compiler.exe
       - run: bun run publish:packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

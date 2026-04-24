@@ -4,13 +4,18 @@ import { SourceId, Source } from "../model/source";
 import { JsLikeExt, moduleAtPath } from "./sourcePath";
 
 const PackageRoots = [
+  "kdts/@types",
   "@types",
   "node_modules/@kimlikdao/kdts/@types",
   "node_modules"
 ] as const;
 
 type PackageJson = {
+  kdts?: {
+    sources?: string;
+  };
   main?: string;
+  name?: string;
   types?: string;
   typings?: string;
 };
@@ -62,6 +67,25 @@ const resolveRootImport = (packageDir: string, packageJson: PackageJson): string
   return resolveDeclaration(combine(packageDir, declarationPath));
 }
 
+const resolveRepoPackage = (
+  packageName: string,
+  subpath: string,
+): string => {
+  const packageJsonPath = "package.json";
+  if (!isFile(packageJsonPath))
+    return "";
+
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as PackageJson;
+  if (packageJson.name != packageName)
+    return "";
+
+  const sourceRoot = packageJson.kdts?.sources || "";
+  const path = subpath
+    ? resolveDeclaration(combine(sourceRoot, subpath.slice(1)))
+    : resolveRootImport(sourceRoot, packageJson);
+  return path.startsWith("@") ? "./" + path : path;
+}
+
 const resolvePackageFrom = (
   packageDir: string,
   packageName: string,
@@ -83,6 +107,10 @@ const resolvePackageFrom = (
 
 const resolvePackage = (packagePath: string): string => {
   const [packageName, subpath] = splitPackagePath(packagePath);
+  const repoPackagePath = resolveRepoPackage(packageName, subpath);
+  if (repoPackagePath)
+    return repoPackagePath;
+
   for (const packageRoot of PackageRoots) {
     const resolvedPath = resolvePackageFrom(
       combine(packageRoot, packageName),

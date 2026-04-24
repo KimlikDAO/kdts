@@ -58,7 +58,7 @@ const getNativeExecutable = (
 const getJavaExecutable = (): Executable => {
   const javaJarPath = findFile(
     fromModule("./compiler.jar"),
-    fromModule("../vendor/gcc/bazel-bin/compiler_uberjar_deploy.jar"),
+    fromModule("../../gcc/bazel-bin/compiler_uberjar_deploy.jar"),
     findPackage("google-closure-compiler-java/compiler.jar"),
   );
   if (!javaJarPath)

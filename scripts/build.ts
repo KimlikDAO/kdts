@@ -10,12 +10,12 @@ import {
 import { dirname, join, resolve } from "node:path";
 import {
   getNativeCompilerBuildDir,
+  getNativeCompilerFile,
   getNativeCompilerPackage,
-  getNativeCompilerPackageDir,
   getNativeCompilerPackageName,
-  NativeCompilerPackages,
-  NativeCompilerPackage
-} from "../gcc/nativePackages";
+  NativeCompilerPackage,
+  NativeCompilerPackages
+} from "../kdts/gcc/nativePackages";
 import { ensureCompilerJar } from "./buildCompiler";
 import { buildNativeCompiler } from "./graal";
 import { run } from "./run";
@@ -42,18 +42,31 @@ type RootPackageJson = {
 };
 
 type NativePackageJson = {
+  author?: string;
+  bugs?: unknown;
+  homepage?: string;
+  license?: string;
+  repository?: unknown;
+  version: string;
   cpu: string[];
   description?: string;
   files: string[];
   name: string;
   os: string[];
-  preferUnplugged?: boolean;
 };
 
 const BuildDir = "build";
+const SourceDir = "kdts";
 const RootBuildDir = join(BuildDir, "kdts");
-const RootFiles = ["kdts.d.ts", "bench.ts", "README.md"];
-const UtilFiles = ["util/assert.ts", "util/arrays.ts", "util/cli.ts"];
+const RootFiles = [
+  ["kdts/kdts.d.ts", "kdts.d.ts"],
+  ["kdts/bench.ts", "bench.ts"],
+  ["README.md", "README.md"],
+] as const;
+const UtilFiles = [
+  ["kdts/util/assert.ts", "util/assert.ts"],
+  ["kdts/util/arrays.ts", "util/arrays.ts"],
+] as const;
 
 const args = process.argv.slice(2);
 const isLocal = args.includes("--local");
@@ -65,9 +78,13 @@ const providedCompilerJar = compilerJarArgIndex == -1
   ? ""
   : args[compilerJarArgIndex + 1] || "";
 
-const copyToDir = (baseDir: string, path: string) => {
-  mkdirSync(join(baseDir, dirname(path)), { recursive: true });
-  copyFileSync(path, join(baseDir, path));
+const copyToDir = (
+  baseDir: string,
+  sourcePath: string,
+  targetPath = sourcePath,
+) => {
+  mkdirSync(join(baseDir, dirname(targetPath)), { recursive: true });
+  copyFileSync(sourcePath, join(baseDir, targetPath));
 };
 
 const readRootPackageJson = (): RootPackageJson =>
@@ -79,11 +96,8 @@ const sanitizeRootPackageJson = (
   const sanitized = structuredClone(packageJson);
   delete sanitized.devDependencies;
   delete sanitized.scripts;
-  if (sanitized.dependencies) {
-    delete sanitized.dependencies["google-closure-compiler"];
-    if (!Object.keys(sanitized.dependencies).length)
-      delete sanitized.dependencies;
-  }
+  if (sanitized.kdts)
+    sanitized.kdts["sources"] = ".";
   sanitized.optionalDependencies = Object.fromEntries(
     NativeCompilerPackages.map((pkg) => [
       getNativeCompilerPackageName(pkg),
@@ -101,27 +115,44 @@ const writeBuildPackageJson = (
   writeFileSync(path, JSON.stringify(packageJson, null, 2) + "\n");
 };
 
+const makeNativePackageJson = (
+  rootPackageJson: RootPackageJson,
+  nativePackage: NativeCompilerPackage,
+): NativePackageJson => ({
+  author: rootPackageJson.author,
+  bugs: rootPackageJson.bugs,
+  cpu: [nativePackage.arch],
+  description: `Native ${nativePackage.displayName} build of @kimlikdao/gcc`,
+  files: [getNativeCompilerFile(nativePackage)],
+  homepage: rootPackageJson.homepage,
+  license: rootPackageJson.license,
+  name: getNativeCompilerPackageName(nativePackage),
+  os: [nativePackage.platform],
+  repository: rootPackageJson.repository,
+  version: rootPackageJson.version,
+});
+
 const buildRootPackage = (
   packageJson: RootPackageJson,
   compilerJarPath: string,
 ) => {
   rmSync(RootBuildDir, { recursive: true, force: true });
   mkdirSync(join(RootBuildDir, "util"), { recursive: true });
-  cpSync("@types", join(RootBuildDir, "@types"), { recursive: true });
+  cpSync(join(SourceDir, "@types"), join(RootBuildDir, "@types"), { recursive: true });
   writeBuildPackageJson(
     join(RootBuildDir, "package.json"),
     sanitizeRootPackageJson(packageJson),
   );
-  for (const path of RootFiles)
-    copyToDir(RootBuildDir, path);
-  for (const path of UtilFiles)
-    copyToDir(RootBuildDir, path);
+  for (const [sourcePath, targetPath] of RootFiles)
+    copyToDir(RootBuildDir, sourcePath, targetPath);
+  for (const [sourcePath, targetPath] of UtilFiles)
+    copyToDir(RootBuildDir, sourcePath, targetPath);
   copyFileSync(compilerJarPath, join(RootBuildDir, "compiler.jar"));
 
   const command = [
     process.execPath,
-    "kdts.ts",
-    "kdts.ts",
+    join(SourceDir, "kdts.ts"),
+    join(SourceDir, "kdts.ts"),
     "--fast",
     "-o",
     join(RootBuildDir, "kdts.js"),
@@ -132,28 +163,13 @@ const buildRootPackage = (
   chmodSync(join(RootBuildDir, "kdts.js"), 0o755);
 };
 
-const readNativePackageJson = (
-  nativePackage: NativeCompilerPackage,
-): NativePackageJson =>
-  JSON.parse(readFileSync(join(getNativeCompilerPackageDir(nativePackage), "package.json"), "utf8")) as NativePackageJson;
-
 const writeNativePackageJson = (
   rootPackageJson: RootPackageJson,
   nativePackage: NativeCompilerPackage,
 ) => {
-  const packageJson = readNativePackageJson(nativePackage);
-  const buildPackageJson = {
-    ...packageJson,
-    author: rootPackageJson.author,
-    bugs: rootPackageJson.bugs,
-    homepage: rootPackageJson.homepage,
-    license: rootPackageJson.license,
-    repository: rootPackageJson.repository,
-    version: rootPackageJson.version,
-  };
   writeBuildPackageJson(
     join(getNativeCompilerBuildDir(nativePackage), "package.json"),
-    buildPackageJson,
+    makeNativePackageJson(rootPackageJson, nativePackage),
   );
 };
 
@@ -172,8 +188,11 @@ const buildCurrentNativePackage = (
 
   const nativeCompilerJar = join(buildDir, "compiler.jar");
   copyFileSync(compilerJarPath, nativeCompilerJar);
-  buildNativeCompiler(nativePackage, resolve(buildDir));
-  rmSync(nativeCompilerJar, { force: true });
+  try {
+    buildNativeCompiler(nativePackage, resolve(buildDir));
+  } finally {
+    rmSync(nativeCompilerJar, { force: true });
+  }
 };
 
 const rootPackageJson = readRootPackageJson();

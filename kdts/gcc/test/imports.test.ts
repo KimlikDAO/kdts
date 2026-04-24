@@ -3,21 +3,29 @@ import { expect } from "bun:test";
 import { SourceSet } from "../../frontend/sourceSet";
 import { ModuleImports } from "../../model/moduleImports";
 import { harness } from "../../util/testing/harness";
+import { stripIndent } from "../../util/testing/source";
 import { transpileTs } from "../transpile";
 
 const expectEmit = harness(transpileTs);
 
 test("type-only imports synthesize Closure @const aliases", () => {
-  expectEmit(`
+  const out = transpileTs(
+    { id: "module:kdts/test", path: "/kdts/test.ts" },
+    `
     import type { LargeConstant as Marker } from "./kdts.d.ts";
 
     const value = 1;
-  `, `
+  `,
+    new SourceSet(),
+    {},
+    new ModuleImports()
+  );
+  expect(out).toBe(stripIndent(`
     /* gcc-js: import is replaced by alias import */
     /** @const */
-    const Marker = kdts$$module$kdts_d$LargeConstant;
+    const Marker = kdts$$module$kdts$kdts_d$LargeConstant;
     const value = 1;
-  `);
+  `));
 });
 
 test("exported declarations stay exported", () => {

@@ -27,7 +27,7 @@
     "noUnusedParameters": true,
     "paths": {
       "uglify-js": [
-        "./@types/uglify-js"
+        "./kdts/@types/uglify-js"
       ]
     },
     "skipLibCheck": true,
@@ -43,8 +43,8 @@
     "./**/*.tsx"
   ],
   "exclude": [
-    "@types/**",
-    "vendor/**",
+    "kdts/@types/**",
+    "gcc/**",
     "**/node_modules",
     "**/.kdts_isolate",
     "**/build",

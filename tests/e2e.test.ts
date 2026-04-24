@@ -5,8 +5,8 @@ import {
   readdirSync,
   writeFileSync
 } from "node:fs";
-import { combine, replaceExt } from "../util/paths";
-import { compile } from "../compiler";
+import { combine, replaceExt } from "../kdts/util/paths";
+import { compile } from "../kdts/compiler";
 
 test("compile API exports e2e", async () => {
   mkdirSync("build", { recursive: true });
