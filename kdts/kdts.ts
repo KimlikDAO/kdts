@@ -75,8 +75,15 @@ Examples:
   process.exit(0);
 }
 
+function version() {
+  console.log(`kdts ${pkg.version}-${Source}`);
+  process.exit(0);
+}
+
 const verb = args.asStringOr("target", "");
 
+if (args.isTrue("version"))
+  version();
 if (args.isTrue("help"))
   usage();
 

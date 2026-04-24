@@ -108,11 +108,11 @@ jobs:
       - run: |
           pushd musl
           ./configure --prefix="$MUSL_HOME" --static
-          sudo make
-          make install
+          sudo make && make install
           popd
 
-          ln -s "$MUSL_HOME/bin/musl-gcc" "$MUSL_HOME/bin/x86_64-linux-musl-gcc"
+          ln -sf "$MUSL_HOME/bin/musl-gcc" "$MUSL_HOME/bin/x86_64-linux-musl-gcc"
+          export PATH="$MUSL_HOME/bin:$PATH"
           echo "$MUSL_HOME/bin" >> "$GITHUB_PATH"
           x86_64-linux-musl-gcc --version
 
@@ -125,14 +125,16 @@ jobs:
       - uses: graalvm/setup-graalvm@v1
         with:
           distribution: graalvm-community
-          java-version: "21"
+          java-version: "24"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: "true"
       - uses: actions/download-artifact@v4
         with:
           name: compiler-jar
           path: build/compiler
-      - run: bun run build:native -- --compiler-jar build/compiler/compiler.jar
+      - run: |
+          export PATH="$MUSL_HOME/bin:$PATH"
+          bun run build:native -- --compiler-jar build/compiler/compiler.jar
       - uses: actions/upload-artifact@v4
         with:
           name: gcc-linux
@@ -151,7 +153,7 @@ jobs:
       - uses: graalvm/setup-graalvm@v1
         with:
           distribution: graalvm-community
-          java-version: "21"
+          java-version: "24"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: "true"
       - uses: actions/download-artifact@v4
