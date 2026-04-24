@@ -11,6 +11,7 @@ import {
   TopTypeName,
   UnionType
 } from "../types";
+import { stripIndent } from "../../util/testing/source";
 
 describe("PrimitiveType", () => {
   test("the null type", () => {
@@ -272,7 +273,7 @@ describe("GenericType", () => {
       new InstanceType("User")
     ]);
     expect(record.toClosureExpr()).toBe("!Object<string,!User>");
-  }) 
+  });
 });
 
 describe("StructType", () => {
@@ -375,17 +376,15 @@ describe("StructType", () => {
 
 describe("FunctionType", () => {
   test("function without a return value", () => {
-    // Basic function with no parameters
     const voidFn = new FunctionType(
-        [],
-        undefined,
-        new PrimitiveType(PrimitiveTypeName.Undefined)
-      );
+      [],
+      undefined,
+      new PrimitiveType(PrimitiveTypeName.Undefined)
+    );
     expect(voidFn.toClosureExpr()).toBe("function()");
   });
 
   test("function with parameters and return type", () => {
-    // Function with parameters and return type
     const basicFn = new FunctionType(
       [new PrimitiveType(PrimitiveTypeName.String), new PrimitiveType(PrimitiveTypeName.Number)],
       undefined,
@@ -395,20 +394,18 @@ describe("FunctionType", () => {
   });
 
   test("function with union types and optional parameters", () => {
-    // Function with optional parameters
     const optParamFn = new FunctionType(
       [new PrimitiveType(PrimitiveTypeName.String), new PrimitiveType(PrimitiveTypeName.Number)],
       undefined,
       new PrimitiveType(PrimitiveTypeName.Boolean),
       false,
-      1 // optionalAfter = 1 means params[1] and beyond are optional
+      1
     );
     optParamFn.params[1].modifiers = Modifier.Optional;
     expect(optParamFn.toClosureExpr()).toBe("function(string, number=): boolean");
   });
 
   test("optional function(string)->number", () => {
-    // Optional function
     const optFn = new FunctionType(
       [new PrimitiveType(PrimitiveTypeName.String)],
       undefined,
@@ -503,7 +500,7 @@ describe("toTsExpr (TS/JSDoc inside {})", () => {
     expect(fn.toTsExpr()).toBe("(arg0: string) => number");
   });
 
-  test("optional function: bare × toParam (4 combos)", () => {
+  test("optional function: bare x toParam (4 combos)", () => {
     const fn = new FunctionType(
       [new PrimitiveType(PrimitiveTypeName.String)],
       undefined,
@@ -526,13 +523,13 @@ describe("toTsExpr (TS/JSDoc inside {})", () => {
       undefined,
       new PrimitiveType(PrimitiveTypeName.Boolean)
     );
-    expect(fn.toTsDoc()).toBe(
-      "/**\n" +
-      " * @param {string} arg0\n" +
-      " * @param {number} arg1\n" +
-      " * @return {boolean}\n" +
-      " */"
-    );
+    expect(fn.toTsDoc()).toBe(stripIndent(`
+      /**
+       * @param {string} arg0
+       * @param {number} arg1
+       * @return {boolean}
+       */`
+    ));
   });
 
   test("toTsDoc optional param", () => {
@@ -544,13 +541,13 @@ describe("toTsExpr (TS/JSDoc inside {})", () => {
       1
     );
     fn.params[1].modifiers = Modifier.Optional;
-    expect(fn.toTsDoc()).toBe(
-      "/**\n" +
-      " * @param {string} arg0\n" +
-      " * @param {number=} arg1\n" +
-      " * @return {boolean}\n" +
-      " */"
-    );
+    expect(fn.toTsDoc()).toBe(stripIndent(`
+      /**
+       * @param {string} arg0
+       * @param {number=} arg1
+       * @return {boolean}
+       */`
+    ));
   });
 
   test("toTsDoc rest param", () => {
@@ -561,13 +558,13 @@ describe("toTsExpr (TS/JSDoc inside {})", () => {
       true,
       2
     );
-    expect(fn.toTsDoc()).toBe(
-      "/**\n" +
-      " * @param {string} arg0\n" +
-      " * @param {...number[]} arg1\n" +
-      " * @return {undefined}\n" +
-      " */"
-    );
+    expect(fn.toTsDoc()).toBe(stripIndent(`
+      /**
+       * @param {string} arg0
+       * @param {...number[]} arg1
+       * @return {undefined}
+       */`
+    ));
   });
 
   test("toTsDoc NoInline NoSideEffects Pure", () => {
@@ -577,14 +574,14 @@ describe("toTsExpr (TS/JSDoc inside {})", () => {
       new PrimitiveType(PrimitiveTypeName.Number)
     );
     fn.modifiers = Modifier.NoInline | Modifier.SideEffectFree | Modifier.Pure;
-    expect(fn.toTsDoc()).toBe(
-      "/**\n" +
-      " * @noinline\n" +
-      " * @nosideeffects\n" +
-      " * @pureOrBreakMyCode\n" +
-      " * @param {number} arg0\n" +
-      " * @return {number}\n" +
-      " */"
-    );
+    expect(fn.toTsDoc()).toBe(stripIndent(`
+      /**
+       * @noinline
+       * @nosideeffects
+       * @pureOrBreakMyCode
+       * @param {number} arg0
+       * @return {number}
+       */`
+    ));
   });
 });
