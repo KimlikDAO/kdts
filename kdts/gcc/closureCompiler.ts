@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { DiskProgram } from "../model/program";
 import {
   getNativeCompilerFile,
+  getNativeCompilerBuildDir,
   getNativeCompilerPackage,
   getNativeCompilerPackageName,
   getStockCompilerPackageName,
@@ -16,12 +17,18 @@ const JavaRuntimeArgs = [
 type Executable = {
   cmd: string[];
   platform: "native" | "java";
+  source: "npm-kdts-gcc" | "local-kdts-gcc" | "stock-gcc";
+};
+
+type ResolvedPackage = {
+  path: string;
+  source?: "local-kdts-gcc";
 };
 
 const findFile = (...paths: (string | null)[]): string | null =>
   paths.find((path): path is string => !!path && existsSync(path)) || null;
 
-const findPackage = (path: string): string | null => {
+const findRuntimePackage = (path: string): string | null => {
   try {
     return fileURLToPath(import.meta.resolve(path));
   } catch {
@@ -32,6 +39,26 @@ const findPackage = (path: string): string | null => {
 const fromModule = (path: string): string =>
   fileURLToPath(new URL(path, import.meta.url));
 
+const findPackage = (
+  runtimePath: string,
+  buildPath?: string,
+): ResolvedPackage | null => {
+  const resolvedRuntimePath = findRuntimePackage(runtimePath);
+  if (resolvedRuntimePath)
+    return { path: resolvedRuntimePath };
+
+  if (!buildPath)
+    return null;
+
+  const resolvedBuildPath = findFile(fromModule(`../../${buildPath}`));
+  if (resolvedBuildPath)
+    return { path: resolvedBuildPath, source: "local-kdts-gcc" };
+  return null;
+};
+
+const getJavaCommand = (javaJarPath: string): string[] =>
+  ["java", ...JavaRuntimeArgs, "-jar", javaJarPath];
+
 const getNativeExecutable = (
   platform = process.platform,
   arch = process.arch,
@@ -41,31 +68,57 @@ const getNativeExecutable = (
     return null;
 
   const compilerFile = getNativeCompilerFile(nativePackage);
-  const nativeImagePath = findPackage(
+  const kdtsNativeImage = findPackage(
     `${getNativeCompilerPackageName(nativePackage)}/${compilerFile}`,
-  ) || findPackage(
+    `${getNativeCompilerBuildDir(nativePackage)}/${compilerFile}`,
+  );
+  if (kdtsNativeImage)
+    return {
+      cmd: [kdtsNativeImage.path],
+      platform: "native",
+      source: kdtsNativeImage.source || "npm-kdts-gcc",
+    };
+
+  const stockNativeImage = findPackage(
     `${getStockCompilerPackageName(nativePackage)}/${compilerFile}`,
   );
-  if (!nativeImagePath)
+  if (!stockNativeImage)
     return null;
 
   return {
-    cmd: [nativeImagePath],
+    cmd: [stockNativeImage.path],
     platform: "native",
+    source: stockNativeImage.source || "stock-gcc",
   };
 };
 
 const getJavaExecutable = (): Executable => {
-  const javaJarPath = findFile(
-    fromModule("./compiler.jar"),
+  const kdtsJavaJarPath = findFile(fromModule("./compiler.jar"));
+  if (kdtsJavaJarPath)
+    return {
+      cmd: getJavaCommand(kdtsJavaJarPath),
+      platform: "java",
+      source: "npm-kdts-gcc",
+    };
+
+  const localJavaJarPath = findFile(
+    fromModule("../../build/compiler/compiler.jar"),
     fromModule("../../gcc/bazel-bin/compiler_uberjar_deploy.jar"),
-    findPackage("google-closure-compiler-java/compiler.jar"),
   );
-  if (!javaJarPath)
+  if (localJavaJarPath)
+    return {
+      cmd: getJavaCommand(localJavaJarPath),
+      platform: "java",
+      source: "local-kdts-gcc",
+    };
+
+  const stockJavaJarPath = findPackage("google-closure-compiler-java/compiler.jar");
+  if (!stockJavaJarPath)
     throw new Error("No Closure Compiler jar found in node_modules.");
   return {
-    cmd: ["java", ...JavaRuntimeArgs, "-jar", javaJarPath],
+    cmd: getJavaCommand(stockJavaJarPath.path),
     platform: "java",
+    source: stockJavaJarPath.source || "stock-gcc",
   };
 };
 
@@ -117,13 +170,13 @@ const compileWithClosureCompiler = async (
   program: DiskProgram,
   params: ClosureCompilerParams,
 ): Promise<string> => {
-  const { cmd, platform } = createClosureCompilerCommand(program, params);
+  const { cmd, platform, source } = createClosureCompilerCommand(program, params);
   console.info(
     "GCC isolate:   ",
     program.isolateDir,
     `(for ${program.entry})`
   );
-  console.info("GCC platform:  ", platform);
+  console.info(`GCC platform:  ${platform} (${source})`);
 
   const proc = Bun.spawnSync({
     cmd,

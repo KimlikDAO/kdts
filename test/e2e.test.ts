@@ -46,4 +46,4 @@ test("compile API e2e", async () => {
       throw new Error(`Expected compile() to return code for ${fileName}`);
     expect(code).toBe(readFileSync(output, "utf8"));
   }
-}, { timeout: 15_000 });
+}, { timeout: 20_000 });

@@ -9,6 +9,10 @@ function arr<T>(x: T[] | T): T[] {
   return Array.isArray(x) ? x : [x];
 }
 
+console.log(arr([1, 3, 5]));
+console.log(arr(["1", "2", "3"]));
+console.log(arr([1n, 3n, 5n]));
+
 export default () => {
   const arrSq = arr(squares);
   for (const i of arrSq)

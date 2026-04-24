@@ -22,7 +22,7 @@ import { run } from "./run";
 
 type RootPackageJson = {
   author?: string;
-  bin?: Record<string, string>;
+  bin?: string | Record<string, string>;
   bugs?: unknown;
   dependencies?: Record<string, string>;
   description?: string;
@@ -90,21 +90,39 @@ const copyToDir = (
 const readRootPackageJson = (): RootPackageJson =>
   JSON.parse(readFileSync("package.json", "utf8")) as RootPackageJson;
 
-const sanitizeRootPackageJson = (
+const trimKdtsPrefix = (path: string): string => {
+  if (path.startsWith("./kdts/"))
+    return "./" + path.slice("./kdts/".length);
+  if (path.startsWith("kdts/"))
+    return "./" + path.slice("kdts/".length);
+  return path;
+};
+
+const makeBuildRootPackageJson = (
   packageJson: RootPackageJson,
 ): RootPackageJson => {
-  const sanitized = structuredClone(packageJson);
-  delete sanitized.devDependencies;
-  delete sanitized.scripts;
-  if (sanitized.kdts)
-    sanitized.kdts["sources"] = ".";
-  sanitized.optionalDependencies = Object.fromEntries(
+  const buildPackageJson = structuredClone(packageJson);
+  delete buildPackageJson.devDependencies;
+  delete buildPackageJson.scripts;
+  if (buildPackageJson.kdts)
+    buildPackageJson.kdts["sources"] = ".";
+  if (buildPackageJson.types)
+    buildPackageJson.types = trimKdtsPrefix(buildPackageJson.types);
+  if (typeof buildPackageJson.bin == "string")
+    buildPackageJson.bin = trimKdtsPrefix(buildPackageJson.bin);
+  else if (buildPackageJson.bin) {
+    const kdtsBinPath = buildPackageJson.bin["kdts"]
+      || Object.values(buildPackageJson.bin)[0];
+    if (kdtsBinPath)
+      buildPackageJson.bin = trimKdtsPrefix(kdtsBinPath);
+  }
+  buildPackageJson.optionalDependencies = Object.fromEntries(
     NativeCompilerPackages.map((pkg) => [
       getNativeCompilerPackageName(pkg),
-      sanitized.version
+      buildPackageJson.version
     ]),
   );
-  return sanitized;
+  return buildPackageJson;
 };
 
 const writeBuildPackageJson = (
@@ -141,7 +159,7 @@ const buildRootPackage = (
   cpSync(join(SourceDir, "@types"), join(RootBuildDir, "@types"), { recursive: true });
   writeBuildPackageJson(
     join(RootBuildDir, "package.json"),
-    sanitizeRootPackageJson(packageJson),
+    makeBuildRootPackageJson(packageJson),
   );
   for (const [sourcePath, targetPath] of RootFiles)
     copyToDir(RootBuildDir, sourcePath, targetPath);

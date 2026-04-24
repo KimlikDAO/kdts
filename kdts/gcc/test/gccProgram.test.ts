@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
 import { combine } from "../../util/paths";
+import { stripIndent } from "../../util/testing/source";
 import { createBuildTempDir } from "../../util/testing/temp";
 import { GccProgram } from "../gccProgram";
 
@@ -38,16 +39,20 @@ test("exported entries materialize a sibling extern file", async () => {
     expect(program.entry).toBe(wrapperPath);
     expect(program.sources).toEqual([externPath, wrapperPath, entry]);
     expect(program.exports.names).toEqual(["answer", "default"]);
-    expect(readFileSync(combine(isolateDir, wrapperPath), "utf8")).toBe(
-      'import kdts_export_default, { answer as kdts_export_answer } from "./entry.ts";\n' +
-      '\n' +
-      '__kdts_export__("default", kdts_export_default);\n' +
-      '__kdts_export__("answer", kdts_export_answer);\n'
-    );
-    expect(readFileSync(combine(isolateDir, externPath), "utf8")).toBe(
-      "/** @fileoverview @externs */\n" +
-      "function __kdts_export__(name, value) {}\n"
-    );
+    expect(readFileSync(combine(isolateDir, wrapperPath), "utf8")).toBe(stripIndent(`
+      import kdts_export_default, { answer as kdts_export_answer } from "./entry.ts";
+
+      __kdts_export__("default", kdts_export_default);
+      __kdts_export__("answer", kdts_export_answer);
+    `));
+    expect(readFileSync(combine(isolateDir, externPath), "utf8")).toBe(stripIndent(`
+      /** @fileoverview @externs */
+      /**
+       * @param {string} name
+       * @param {*} value
+       */
+      function __kdts_export__(name, value) {}
+    `));
   } finally {
     rmSync(dir, { force: true, recursive: true });
   }

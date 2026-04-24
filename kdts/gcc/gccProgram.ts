@@ -13,9 +13,14 @@ import { transpileJs } from "./transpileJs";
 
 const SourceScanner = new Transpiler({ loader: "ts" });
 const KdtsExportName = "__kdts_export__";
-const KdtsExportExtern = `/** @fileoverview @externs */
+const KdtsExportExtern = `
+/** @fileoverview @externs */
+/**
+ * @param {string} name
+ * @param {*} value
+ */
 function ${KdtsExportName}(name, value) {}
-`;
+`.slice(1);
 
 const toMarkerBinding = (
   prefix: string,
