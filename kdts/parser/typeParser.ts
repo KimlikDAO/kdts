@@ -13,34 +13,39 @@ import {
   UnionType
 } from "../model/types";
 
-/** @type {Set<string>} */
-const PrimitiveNames = new Set(Object.values(PrimitiveTypeName));
+const PrimitiveNames = new Set<PrimitiveTypeName>(Object.values(PrimitiveTypeName));
 
-/** @type {Map<string, string>} */
-const TopTypeNames = new Map([
+const TopTypeNames = new Map<string, TopTypeName>([
   ["any", TopTypeName.Any],
   ["unknown", TopTypeName.Unknown]
 ]);
 
+type TypePrefixParseResult = {
+  type: Type;
+  endPos: number;
+  paramOpt: boolean;
+  paramRest: boolean;
+};
+
+const isPrimitiveTypeName = (value: string): value is PrimitiveTypeName =>
+  PrimitiveNames.has(value as PrimitiveTypeName);
+
 /**
- * A parser for type expressions
+ * A parser for type expressions.
  */
 class Parser {
-  /**
-   * @param {string} input The input string to parse
-   * @param {number=} pos The starting position (defaults to 0)
-   */
-  constructor(input, pos = 0) {
-    /** @const {string} */
+  input: string;
+  private pos: number;
+
+  constructor(input: string, pos = 0) {
     this.input = input;
-    /** @private {number} */
     this.pos = pos;
   }
 
   /**
-   * Skips whitespace characters (including * for JSDoc continuation)
+   * Skips whitespace characters (including * for JSDoc continuation).
    */
-  skipWhitespace() {
+  skipWhitespace(): void {
     for (; this.pos < this.input.length; ++this.pos) {
       const ch = this.input.charCodeAt(this.pos);
       if (ch != 32 && ch != 9 && ch != 10 && ch != 13 && ch != 42)
@@ -49,41 +54,39 @@ class Parser {
   }
 
   /**
-   * Skips whitespace and expects a specific character
-   * @param {number} ch The expected character code
+   * Skips whitespace and expects a specific character.
    */
-  expectChar(ch) {
+  expectChar(ch: number): void {
     this.skipWhitespace();
     if (this.input.charCodeAt(this.pos) != ch)
       throw `Expected '${String.fromCharCode(ch)}' at position ${this.pos}`;
-    this.pos++; // skip expected character
+    this.pos++;
   }
 
   /**
-   * Skips whitespace and expects either of two specific characters
-   * @param {number} ch1 The first expected character code
-   * @param {number} ch2 The second expected character code
-   * @return {boolean} Whether the second character was found (true) or the first (false)
+   * Skips whitespace and expects either of two specific characters.
+   * Returns whether the second character was found.
    */
-  expectEitherChar(ch1, ch2) {
+  expectEitherChar(ch1: number, ch2: number): boolean {
     this.skipWhitespace();
-    if (this.input.charCodeAt(this.pos) != ch1 && this.input.charCodeAt(this.pos) != ch2)
+    const current = this.input.charCodeAt(this.pos);
+    if (current != ch1 && current != ch2)
       throw `Expected '${String.fromCharCode(ch1)}' or '${String.fromCharCode(ch2)}' at position ${this.pos}`;
-    return this.input.charCodeAt(this.pos++) == ch2;
+    this.pos++;
+    return current == ch2;
   }
 
   /**
-   * Skips whitespace and expects a specific string
-   * @param {string} value The expected string
+   * Skips whitespace and expects a specific string.
    */
-  expect(value) {
+  expect(value: string): void {
     this.skipWhitespace();
     if (this.input.slice(this.pos, this.pos + value.length) != value)
       throw `Expected '${value}' at position ${this.pos}`;
     this.pos += value.length;
   }
 
-  test(value) {
+  test(value: string): boolean {
     this.skipWhitespace();
     if (this.input.slice(this.pos, this.pos + value.length) == value) {
       this.pos += value.length;
@@ -93,11 +96,9 @@ class Parser {
   }
 
   /**
-   * Skips whitespace and consumes a character if present
-   * @param {number} ch The character code to consume
-   * @return {boolean} Whether the character was consumed
+   * Skips whitespace and consumes a character if present.
    */
-  testChar(ch) {
+  testChar(ch: number): boolean {
     this.skipWhitespace();
     if (this.input.charCodeAt(this.pos) == ch) {
       this.pos++;
@@ -107,16 +108,15 @@ class Parser {
   }
 
   /**
-   * Reads an identifier
-   * @return {string} The identifier
+   * Reads an identifier.
    */
-  parseIdentifier() {
+  parseIdentifier(): string {
     this.skipWhitespace();
     let i = this.pos;
     for (; i < this.input.length; ++i) {
       const ch = this.input.charCodeAt(i);
       if (!((ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) ||
-        (ch > 127) ||
+        ch > 127 ||
         (ch >= 48 && ch <= 57) || ch == 95 || ch == 36 || ch == 46))
         break;
     }
@@ -126,15 +126,16 @@ class Parser {
   }
 
   /**
-   * Detects whether the upcoming paren group is a function type
-   * @return {boolean} Whether the group is a function type
+   * Detects whether the upcoming paren group is a function type.
    */
-  detectFunctionType() {
+  detectFunctionType(): boolean {
     let i = this.pos + 1;
     for (let parenLevel = 1; i < this.input.length; ++i) {
       const ch = this.input.charCodeAt(i);
-      if (ch == 40) parenLevel++;
-      else if (ch == 41 && --parenLevel == 0) break;
+      if (ch == 40)
+        parenLevel++;
+      else if (ch == 41 && --parenLevel == 0)
+        break;
     }
     for (; ++i < this.input.length;) {
       const ch = this.input.charCodeAt(i);
@@ -145,34 +146,35 @@ class Parser {
   }
 
   /**
-   * Parses a constructor type expression
-   * @return {ConstructorType | null} The parsed constructor type
-   * @throws {Error} If parsing fails
+   * Parses a constructor type expression.
    */
-  parseConstructorType() {
-    if (!this.test("new")) return null;
+  parseConstructorType(): ConstructorType | null {
+    if (!this.test("new"))
+      return null;
     const type = this.parseFunctionType();
     return new ConstructorType(
-      type.returnType, null, null, type.params, type.paramNames, type.rest, type.optionalAfter);
+      type.returnType,
+      null,
+      null,
+      type.params,
+      type.paramNames,
+      type.rest,
+      type.optionalAfter
+    );
   }
 
   /**
-   * Parses a function type expression
-   * @return {FunctionType} The parsed function type
-   * @throws {Error} If parsing fails
+   * Parses a function type expression.
    */
-  parseFunctionType() {
-    /** @const {Type[]} */
-    const params = [];
-    /** @const {string[]} */
-    const paramNames = [];
-    let optionalAfter = 1e9;
+  parseFunctionType(): FunctionType {
+    const params: Type[] = [];
+    const paramNames: string[] = [];
+    let optionalAfter = Number.POSITIVE_INFINITY;
     let rest = false;
-    /** @type {Type | undefined} */
-    let thisType = undefined;
+    let thisType: Type | undefined;
 
     this.expectChar("(".charCodeAt(0));
-    if (!this.testChar(")".charCodeAt(0)))
+    if (!this.testChar(")".charCodeAt(0))) {
       for (; ;) {
         if (rest)
           throw `Rest parameter must be the last parameter at position ${this.pos}`;
@@ -186,8 +188,11 @@ class Parser {
 
         if (isRest) {
           rest = true;
-          if (paramType instanceof GenericType && paramType.name == "Array")
-            paramType = paramType.params[0];
+          if (paramType instanceof GenericType && paramType.name == "Array") {
+            const elementType = paramType.params[0];
+            if (elementType)
+              paramType = elementType;
+          }
         }
 
         if (isOptional) {
@@ -204,29 +209,30 @@ class Parser {
           params.push(paramType);
           paramNames.push(paramName);
         }
+
         if (this.expectEitherChar(",".charCodeAt(0), ")".charCodeAt(0)))
           break;
       }
+    }
 
     this.expect("=>");
     const returnType = this.parseType();
-    if (optionalAfter == 1e9)
+    if (!Number.isFinite(optionalAfter))
       optionalAfter = params.length;
 
     return new FunctionType(params, paramNames, returnType, rest, optionalAfter, thisType);
   }
 
   /**
-   * Parses a struct/object type
-   * @return {StructType} The parsed struct type
-   * @throws {Error} If parsing fails
+   * Parses a struct/object type.
    */
-  parseStructType() {
-    const members = {};
+  parseStructType(): StructType {
+    const members: Record<string, Type> = {};
     this.expectChar("{".charCodeAt(0));
     for (; ;) {
       if (this.testChar("}".charCodeAt(0)))
         break;
+
       const propName = this.parseIdentifier();
       let isOptional = propName.endsWith("$") || this.testChar("?".charCodeAt(0));
       this.expectChar(":".charCodeAt(0));
@@ -243,19 +249,15 @@ class Parser {
     return new StructType(members);
   }
 
-  /**
-   * @return {Type}
-   * @throws {Error}
-   */
-  parseNamedType() {
+  parseNamedType(): Type {
     const name = this.parseIdentifier();
     const topTypeName = TopTypeNames.get(name);
     if (topTypeName)
-      return new TopType(/** @type {TopTypeName} */(topTypeName));
+      return new TopType(topTypeName);
 
-    const primitiveName = name == "void" ? "undefined" : name;
-    if (PrimitiveNames.has(primitiveName))
-      return new PrimitiveType(/** @type {PrimitiveTypeName} */(primitiveName));
+    const primitiveName = name == "void" ? PrimitiveTypeName.Undefined : name;
+    if (isPrimitiveTypeName(primitiveName))
+      return new PrimitiveType(primitiveName);
 
     const params = this.parseTypeParams();
     if (params)
@@ -264,14 +266,11 @@ class Parser {
   }
 
   /**
-   * Parses a type expression
-   * @return {Type} The parsed type
-   * @throws {Error} If parsing fails
+   * Parses a type expression.
    */
-  parseType() {
+  parseType(): Type {
     const union = new UnionType();
     for (; ;) {
-      let type;
       const isNullable = this.testChar("?".charCodeAt(0));
       let isNextArrayReadonly = this.test("readonly");
       if (isNextArrayReadonly)
@@ -280,26 +279,22 @@ class Parser {
       if (this.pos >= this.input.length)
         break;
 
-      switch (this.input.charCodeAt(this.pos)) {
-        case "(".charCodeAt(0):
-          if (this.detectFunctionType())
-            type = this.parseFunctionType();
-          else {
-            this.pos++; // skip (
-            type = this.parseType();
-            this.expectChar(")".charCodeAt(0));
-          }
-          break;
-        case "{".charCodeAt(0):
-          type = this.parseStructType();
-          break;
-        case "n".charCodeAt(0):
-          type = this.parseConstructorType();
-          if (type)
-            break;
-        // fallthrough
-        default:
-          type = this.parseNamedType();
+      let type: Type;
+      const current = this.input.charCodeAt(this.pos);
+      if (current == "(".charCodeAt(0)) {
+        if (this.detectFunctionType()) {
+          type = this.parseFunctionType();
+        } else {
+          this.pos++;
+          type = this.parseType();
+          this.expectChar(")".charCodeAt(0));
+        }
+      } else if (current == "{".charCodeAt(0)) {
+        type = this.parseStructType();
+      } else if (current == "n".charCodeAt(0)) {
+        type = this.parseConstructorType() ?? this.parseNamedType();
+      } else {
+        type = this.parseNamedType();
       }
 
       while (this.testChar("[".charCodeAt(0))) {
@@ -317,23 +312,25 @@ class Parser {
     }
 
     if (union.typeMap.size == 1) {
-      const type = union.typeMap.values().next().value;
-      type.modifiers |= union.modifiers;
-      return type;
-    } else if (union.typeMap.size == 0)
-      return new PrimitiveType(union.isNullable()
-        ? PrimitiveTypeName.Null : PrimitiveTypeName.Undefined);
+      const type = union.types[0];
+      if (type) {
+        type.modifiers |= union.modifiers;
+        return type;
+      }
+    } else if (union.typeMap.size == 0) {
+      return new PrimitiveType(
+        union.isNullable() ? PrimitiveTypeName.Null : PrimitiveTypeName.Undefined
+      );
+    }
 
     return union;
   }
 
   /**
-   * Parses type parameters
-   * @return {Type[] | null} The parsed type parameters
-   * @throws {Error} If parsing fails
+   * Parses type parameters.
    */
-  parseTypeParams() {
-    const params = [];
+  parseTypeParams(): Type[] | null {
+    const params: Type[] = [];
     if (!this.testChar("<".charCodeAt(0)))
       return null;
     for (; ;) {
@@ -345,29 +342,18 @@ class Parser {
   }
 
   /**
-   * Gets the current position in the input
-   * @return {number} The current position
+   * Gets the current position in the input.
    */
-  getPosition() {
+  getPosition(): number {
     return this.pos;
   }
 }
 
 /**
  * Parses a type expression and returns both the parsed type and the position
- * where parsing ended
- *
- * @param {string} input The input string to parse
- * @param {number=} startPos Optional starting position (defaults to 0)
- * @return {{
- *   type: Type,
- *   endPos: number,
- *   paramOpt: boolean,
- *   paramRest: boolean
- * }} The parsed type and the position where parsing ended
- * @throws {Error} If parsing fails
+ * where parsing ended.
  */
-const parseTypePrefix = (input, startPos = 0) => {
+const parseTypePrefix = (input: string, startPos = 0): TypePrefixParseResult => {
   const parser = new Parser(input, startPos);
   const paramRest = parser.test("...");
   const type = parser.parseType();
@@ -380,13 +366,9 @@ const parseTypePrefix = (input, startPos = 0) => {
 };
 
 /**
- * Parses a type expression and returns only the parsed type
- *
- * @param {string} input The input string to parse
- * @return {Type} The parsed type
- * @throws {Error} If parsing fails
+ * Parses a type expression and returns only the parsed type.
  */
-const parseType = (input) => new Parser(input).parseType();
+const parseType = (input: string): Type => new Parser(input).parseType();
 
 export {
   Parser,

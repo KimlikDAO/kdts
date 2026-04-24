@@ -191,7 +191,7 @@ describe("Arrays", () => {
     expect((inner.params[0] as PrimitiveType).name)
       .toBe(PrimitiveTypeName.BigInt);
   });
-})
+});
 
 describe("Unions and generics", () => {
   it("parses User|Map<string,number>|null", () => {
@@ -298,16 +298,16 @@ describe("Structs", () => {
     expect(ageType.name).toBe(PrimitiveTypeName.Number);
   });
 
-  it("parses {name?:string, age:number}", () => { 
-      const optProp = parseType("{name?: string, age: number}") as StructType;
-      expect(optProp).toBeInstanceOf(StructType);
-      const nameType = optProp.members["name"] as PrimitiveType;
-      expect(nameType).toBeInstanceOf(PrimitiveType);
-      expect(nameType.name).toBe(PrimitiveTypeName.String);
-      expect(nameType.isOptional()).toBeTrue();
-      const ageType = optProp.members["age"] as PrimitiveType;
-      expect(ageType).toBeInstanceOf(PrimitiveType);
-      expect(ageType.name).toBe(PrimitiveTypeName.Number);
+  it("parses {name?:string, age:number}", () => {
+    const optProp = parseType("{name?: string, age: number}") as StructType;
+    expect(optProp).toBeInstanceOf(StructType);
+    const nameType = optProp.members["name"] as PrimitiveType;
+    expect(nameType).toBeInstanceOf(PrimitiveType);
+    expect(nameType.name).toBe(PrimitiveTypeName.String);
+    expect(nameType.isOptional()).toBeTrue();
+    const ageType = optProp.members["age"] as PrimitiveType;
+    expect(ageType).toBeInstanceOf(PrimitiveType);
+    expect(ageType.name).toBe(PrimitiveTypeName.Number);
   });
 
   it("parses {name$:string, age:number}", () => {
@@ -348,7 +348,7 @@ describe("Structs", () => {
     expect(ageType.name).toBe(PrimitiveTypeName.Number);
   });
 
-  it("parses {name$:string, age:number}", () => {
+  it("parses repeated dollar-suffixed optional fields", () => {
     const withDollarOptional =
       parseType("{name$: string, age: number}") as StructType;
     expect(withDollarOptional).toBeInstanceOf(StructType);
@@ -448,7 +448,7 @@ describe("Functions", () => {
     const returnType = basicFn.returnType as PrimitiveType;
     expect(returnType).toBeInstanceOf(PrimitiveType);
     expect(returnType.name).toBe(PrimitiveTypeName.Undefined);
-  })
+  });
 
   it("parses (a:string,b:number)=>boolean", () => {
     const fnWithParams = parseType("(a: string, b: number) => boolean") as FunctionType;
