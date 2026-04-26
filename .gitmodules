@@ -1,4 +1,4 @@
 [submodule "gcc"]
 	path = gcc
 	url = https://github.com/KimlikDAO/gcc
-	branch = kdts
+	branch = kdts25
