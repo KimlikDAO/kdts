@@ -6,6 +6,13 @@ const BuiltCompilerJar = resolve("build", "compiler", "compiler.jar");
 const BazelCompilerJar = resolve("gcc", "bazel-bin", "compiler_uberjar_deploy.jar");
 const BazelOutputRoot = resolve(".cache", "bazel");
 
+const getBazelStartupOptions = (): string[] => {
+  const serverJavabase = process.env["BAZEL_SERVER_JAVABASE"] || process.env["JAVA_HOME"];
+  if (!serverJavabase)
+    return [];
+  return [`--server_javabase=${serverJavabase}`];
+};
+
 const copyCompilerJar = (jarPath: string): string => {
   mkdirSync(dirname(BuiltCompilerJar), { recursive: true });
   copyFileSync(jarPath, BuiltCompilerJar);
@@ -40,6 +47,7 @@ const ensureCompilerJar = (
   if (!existsSync(BazelCompilerJar)) {
     run([
       "bazelisk",
+      ...getBazelStartupOptions(),
       `--output_user_root=${BazelOutputRoot}`,
       "--batch",
       "build",

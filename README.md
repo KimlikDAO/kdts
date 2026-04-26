@@ -3,6 +3,7 @@
 [![Tests](https://img.shields.io/github/actions/workflow/status/KimlikDAO/kdts/test.yml?branch=main)](https://github.com/KimlikDAO/kdts/actions/workflows/test.yml)
 [![npm version](https://img.shields.io/npm/v/@kimlikdao/kdts.svg)](https://www.npmjs.com/package/@kimlikdao/kdts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Downloads](https://img.shields.io/npm/d18m/@kimlikdao/kdts.svg)](https://www.npmjs.com/package/@kimlikdao/kdts)
 
 `kdts` is an optimization-first TypeScript compiler. Instead of erasing types
 as early as possible, it uses them throughout the compilation to direct
