@@ -15,13 +15,16 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KimlikDAO/kdts.git"
+    "url": "https://github.com/KimlikDAO/kdts.git"
   },
   "homepage": "https://docs.kimlikdao.org/kdts",
   "bugs": {
     "url": "https://github.com/KimlikDAO/kdts/issues"
   },
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "bun": ">=1.3.0"
   },

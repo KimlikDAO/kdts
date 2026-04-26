@@ -21,7 +21,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "25"
-      - uses: bazel-contrib/setup-bazel@0.15.0
+      # https://github.com/bazel-contrib/setup-bazel
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # v0.19.0
         with:
           bazelisk-cache: true
           repository-cache: true
@@ -44,7 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: compiler-jar
           path: build/compiler
@@ -72,7 +73,7 @@ jobs:
           java-version: "25"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: "true"
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: compiler-jar
           path: build/compiler
@@ -128,7 +129,7 @@ jobs:
           java-version: "25"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: "true"
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: compiler-jar
           path: build/compiler
@@ -156,7 +157,7 @@ jobs:
           java-version: "25"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: "true"
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: compiler-jar
           path: build/compiler
@@ -182,7 +183,7 @@ jobs:
           java-version: "25"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           native-image-job-reports: "true"
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: compiler-jar
           path: build/compiler
@@ -195,6 +196,7 @@ jobs:
 
   publish:
     name: publish packages
+    if: startsWith(github.ref, 'refs/tags/v')
     needs:
       - build_kdts
       - build_linux
@@ -204,26 +206,33 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
-      - uses: actions/download-artifact@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+          registry-url: "https://registry.npmjs.org"
+      - run: test "${GITHUB_REF_NAME#v}" = "$(node -p 'require("./package.json").version')"
+      - uses: actions/download-artifact@v8
         with:
           name: kdts
           path: build/kdts
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: gcc-linux
           path: build/gcc-linux
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: gcc-linux-arm64
           path: build/gcc-linux-arm64
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: gcc-macos
           path: build/gcc-macos
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: gcc-windows
           path: build/gcc-windows
@@ -233,5 +242,3 @@ jobs:
           chmod 755 build/gcc-macos/compiler
           chmod 755 build/gcc-windows/compiler.exe
       - run: bun run publish:packages
-        env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}

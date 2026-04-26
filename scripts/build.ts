@@ -34,6 +34,7 @@ type RootPackageJson = {
   license?: string;
   name: string;
   optionalDependencies?: Record<string, string>;
+  publishConfig?: Record<string, string | boolean>;
   repository?: unknown;
   scripts?: Record<string, string>;
   type?: string;
@@ -53,6 +54,7 @@ type NativePackageJson = {
   files: string[];
   name: string;
   os: string[];
+  publishConfig?: Record<string, string | boolean>;
 };
 
 const BuildDir = "build";
@@ -98,6 +100,23 @@ const trimKdtsPrefix = (path: string): string => {
   return path;
 };
 
+const getDefaultBinName = (packageName: string): string =>
+  packageName.replace(/^@[^/]+\//, "");
+
+const makeBuildBinMap = (
+  packageJson: RootPackageJson,
+): Record<string, string> | undefined => {
+  if (typeof packageJson.bin == "string") {
+    const binName = getDefaultBinName(packageJson.name);
+    return { [binName]: `./bin/${binName}` };
+  }
+  if (!packageJson.bin)
+    return undefined;
+  return Object.fromEntries(
+    Object.keys(packageJson.bin).map((name) => [name, `./bin/${name}`]),
+  );
+};
+
 const makeBuildRootPackageJson = (
   packageJson: RootPackageJson,
 ): RootPackageJson => {
@@ -108,14 +127,7 @@ const makeBuildRootPackageJson = (
     buildPackageJson.kdts["sources"] = ".";
   if (buildPackageJson.types)
     buildPackageJson.types = trimKdtsPrefix(buildPackageJson.types);
-  if (typeof buildPackageJson.bin == "string")
-    buildPackageJson.bin = trimKdtsPrefix(buildPackageJson.bin);
-  else if (buildPackageJson.bin) {
-    const kdtsBinPath = buildPackageJson.bin["kdts"]
-      || Object.values(buildPackageJson.bin)[0];
-    if (kdtsBinPath)
-      buildPackageJson.bin = trimKdtsPrefix(kdtsBinPath);
-  }
+  buildPackageJson.bin = makeBuildBinMap(buildPackageJson);
   buildPackageJson.optionalDependencies = Object.fromEntries(
     NativeCompilerPackages.map((pkg) => [
       getNativeCompilerPackageName(pkg),
@@ -146,6 +158,9 @@ const makeNativePackageJson = (
   license: rootPackageJson.license,
   name: getNativeCompilerPackageName(nativePackage),
   os: [nativePackage.platform],
+  publishConfig: {
+    access: "public",
+  },
   repository: rootPackageJson.repository,
   version: rootPackageJson.version,
 });
@@ -154,12 +169,13 @@ const buildRootPackage = (
   packageJson: RootPackageJson,
   compilerJarPath: string,
 ) => {
+  const buildPackageJson = makeBuildRootPackageJson(packageJson);
   rmSync(RootBuildDir, { recursive: true, force: true });
   mkdirSync(join(RootBuildDir, "util"), { recursive: true });
   cpSync(join(SourceDir, "@types"), join(RootBuildDir, "@types"), { recursive: true });
   writeBuildPackageJson(
     join(RootBuildDir, "package.json"),
-    makeBuildRootPackageJson(packageJson),
+    buildPackageJson,
   );
   for (const [sourcePath, targetPath] of RootFiles)
     copyToDir(RootBuildDir, sourcePath, targetPath);
@@ -179,6 +195,12 @@ const buildRootPackage = (
     command.push("--override", "Source=npm");
   run(command);
   chmodSync(join(RootBuildDir, "kdts.js"), 0o755);
+  for (const [binName, binPath] of Object.entries(buildPackageJson.bin || {})) {
+    const targetPath = join(RootBuildDir, binPath);
+    mkdirSync(dirname(targetPath), { recursive: true });
+    writeFileSync(targetPath, "#!/usr/bin/env bun\nimport \"../kdts.js\";\n");
+    chmodSync(targetPath, 0o755);
+  }
 };
 
 const writeNativePackageJson = (
