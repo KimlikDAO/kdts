@@ -38,7 +38,7 @@ const publishDir = async (dir: string) => {
     return;
   }
 
-  const args = ["npm", "publish", "--access", "public"];
+  const args = ["bun", "publish", "--access", "public"];
   if (dryRun)
     args.push("--dry-run");
   run(args, resolve(dir), {
