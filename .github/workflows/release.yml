@@ -248,5 +248,3 @@ jobs:
           chmod 755 build/gcc-macos/compiler
           chmod 755 build/gcc-windows/compiler.exe
       - run: bun run publish:packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

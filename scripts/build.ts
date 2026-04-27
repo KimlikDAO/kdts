@@ -68,6 +68,7 @@ const RootFiles = [
 const UtilFiles = [
   ["kdts/util/assert.ts", "util/assert.ts"],
   ["kdts/util/arrays.ts", "util/arrays.ts"],
+  ["kdts/util/cli.ts", "util/cli.ts"],
 ] as const;
 
 const args = process.argv.slice(2);

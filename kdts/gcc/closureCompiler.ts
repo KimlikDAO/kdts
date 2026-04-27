@@ -176,7 +176,7 @@ const compileWithClosureCompiler = async (
     program.isolateDir,
     `(for ${program.entry})`
   );
-  console.info(`GCC platform:  ${platform} (${source})`);
+  console.info(`GCC platform:   ${platform} (${source})`);
 
   const proc = Bun.spawnSync({
     cmd,
