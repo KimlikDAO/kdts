@@ -18,7 +18,7 @@ type Executable = {
   version: string;
 };
 
-type RuntimePackage = {
+type PackageFile = {
   path: string;
   version: string;
 };
@@ -26,23 +26,22 @@ type RuntimePackage = {
 const findFile = (...paths: (string | null)[]): string | null =>
   paths.find((path): path is string => !!path && existsSync(path)) || null;
 
-const readPackageVersion = (packageJsonPath: string): string => {
-  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
-    version?: unknown;
-  };
-  if (typeof packageJson.version != "string" || !packageJson.version)
-    throw new Error(`Missing package.json version in ${packageJsonPath}`);
-  return packageJson.version;
-};
-
-const findRuntimePackage = (
-  path: string,
-  packageJsonPath: string,
-): RuntimePackage | null => {
+const getFileFromPackage = (
+  packageName: string,
+  file: string,
+): PackageFile | null => {
   try {
+    const packageJsonPath = fileURLToPath(
+      import.meta.resolve(`${packageName}/package.json`),
+    );
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+      version?: unknown;
+    };
+    if (typeof packageJson.version != "string" || !packageJson.version)
+      throw new Error(`Missing package.json version in ${packageJsonPath}`);
     return {
-      path: fileURLToPath(import.meta.resolve(path)),
-      version: readPackageVersion(fileURLToPath(import.meta.resolve(packageJsonPath))),
+      path: fileURLToPath(import.meta.resolve(`${packageName}/${file}`)),
+      version: packageJson.version,
     };
   } catch {
     return null;
@@ -64,9 +63,9 @@ const getNativeExecutable = (
     return null;
 
   const compilerFile = getNativeCompilerFile(nativePackage);
-  const kdtsNativeImage = findRuntimePackage(
-    `${getNativeCompilerPackageName(nativePackage)}/${compilerFile}`,
-    `${getNativeCompilerPackageName(nativePackage)}/package.json`,
+  const kdtsNativeImage = getFileFromPackage(
+    getNativeCompilerPackageName(nativePackage),
+    compilerFile,
   );
   if (kdtsNativeImage)
     return {
@@ -83,12 +82,14 @@ const getJavaExecutable = (): Executable => {
     return {
       cmd: getJavaCommand(stagedJavaJarPath),
       platform: "java",
-      version: readPackageVersion(fromModule("./package.json")),
+      version: (JSON.parse(readFileSync(fromModule("./package.json"), "utf8")) as {
+        version?: unknown;
+      }).version as string,
     };
 
-  const installedJavaJarPath = findRuntimePackage(
-    "@kimlikdao/kdts/compiler.jar",
-    "@kimlikdao/kdts/package.json",
+  const installedJavaJarPath = getFileFromPackage(
+    "@kimlikdao/kdts",
+    "compiler.jar",
   );
   if (installedJavaJarPath)
     return {
