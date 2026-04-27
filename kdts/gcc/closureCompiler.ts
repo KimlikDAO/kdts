@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { DiskProgram } from "../model/program";
 import {
@@ -15,15 +15,35 @@ const JavaRuntimeArgs = [
 type Executable = {
   cmd: string[];
   platform: "native" | "java";
-  source: "kdts-package";
+  version: string;
+};
+
+type RuntimePackage = {
+  path: string;
+  version: string;
 };
 
 const findFile = (...paths: (string | null)[]): string | null =>
   paths.find((path): path is string => !!path && existsSync(path)) || null;
 
-const findRuntimePackage = (path: string): string | null => {
+const readPackageVersion = (packageJsonPath: string): string => {
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+    version?: unknown;
+  };
+  if (typeof packageJson.version != "string" || !packageJson.version)
+    throw new Error(`Missing package.json version in ${packageJsonPath}`);
+  return packageJson.version;
+};
+
+const findRuntimePackage = (
+  path: string,
+  packageJsonPath: string,
+): RuntimePackage | null => {
   try {
-    return fileURLToPath(import.meta.resolve(path));
+    return {
+      path: fileURLToPath(import.meta.resolve(path)),
+      version: readPackageVersion(fileURLToPath(import.meta.resolve(packageJsonPath))),
+    };
   } catch {
     return null;
   }
@@ -46,33 +66,35 @@ const getNativeExecutable = (
   const compilerFile = getNativeCompilerFile(nativePackage);
   const kdtsNativeImage = findRuntimePackage(
     `${getNativeCompilerPackageName(nativePackage)}/${compilerFile}`,
+    `${getNativeCompilerPackageName(nativePackage)}/package.json`,
   );
   if (kdtsNativeImage)
     return {
-      cmd: [kdtsNativeImage],
+      cmd: [kdtsNativeImage.path],
       platform: "native",
-      source: "kdts-package",
+      version: kdtsNativeImage.version,
     };
   return null;
 };
 
 const getJavaExecutable = (): Executable => {
-  const kdtsJavaJarPath = findFile(fromModule("./compiler.jar"));
-  if (kdtsJavaJarPath)
+  const stagedJavaJarPath = findFile(fromModule("./compiler.jar"));
+  if (stagedJavaJarPath)
     return {
-      cmd: getJavaCommand(kdtsJavaJarPath),
+      cmd: getJavaCommand(stagedJavaJarPath),
       platform: "java",
-      source: "kdts-package",
+      version: readPackageVersion(fromModule("./package.json")),
     };
 
   const installedJavaJarPath = findRuntimePackage(
     "@kimlikdao/kdts/compiler.jar",
+    "@kimlikdao/kdts/package.json",
   );
   if (installedJavaJarPath)
     return {
-      cmd: getJavaCommand(installedJavaJarPath),
+      cmd: getJavaCommand(installedJavaJarPath.path),
       platform: "java",
-      source: "kdts-package",
+      version: installedJavaJarPath.version,
     };
   throw new Error(
     "No @kimlikdao/kdts compiler.jar found. Build and stage kdts, or install a published @kimlikdao/kdts package.",
@@ -127,13 +149,13 @@ const compileWithClosureCompiler = async (
   program: DiskProgram,
   params: ClosureCompilerParams,
 ): Promise<string> => {
-  const { cmd, platform, source } = createClosureCompilerCommand(program, params);
+  const { cmd, platform, version } = createClosureCompilerCommand(program, params);
   console.info(
     "GCC isolate:   ",
     program.isolateDir,
     `(for ${program.entry})`
   );
-  console.info(`GCC platform:   ${platform} (${source})`);
+  console.info(`GCC platform:   ${platform} (${version})`);
 
   const proc = Bun.spawnSync({
     cmd,
