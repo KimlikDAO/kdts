@@ -2,17 +2,40 @@ import { existsSync, mkdirSync, readdirSync, rmSync, symlinkSync } from "node:fs
 import { join, resolve } from "node:path";
 import { capture, run } from "./run";
 
-const GraalUrl = "https://download.oracle.com/graalvm/21/latest/graalvm-jdk-21_macos-aarch64_bin.tar.gz";
+const GraalMajorVersion = 25;
+const GraalUrl =
+  `https://download.oracle.com/graalvm/${GraalMajorVersion}/latest/graalvm-jdk-${GraalMajorVersion}_macos-aarch64_bin.tar.gz`;
 const CacheDir = resolve(".cache", "graalvm");
-const ArchivePath = join(CacheDir, "graalvm-jdk-21_macos-aarch64_bin.tar.gz");
+const ArchivePath = join(
+  CacheDir,
+  `graalvm-jdk-${GraalMajorVersion}_macos-aarch64_bin.tar.gz`,
+);
 const CurrentDir = join(CacheDir, "current");
 const NativeImagePath = join(CurrentDir, "Contents", "Home", "bin", "native-image");
+
+const readNativeImageMajorVersion = (): number | null => {
+  if (!existsSync(NativeImagePath))
+    return null;
+  try {
+    const versionOutput = capture([NativeImagePath, "--version"]);
+    const match = versionOutput.match(/native-image\s+(\d+)(?:[.\s]|$)/);
+    return match ? Number(match[1]) : null;
+  } catch {
+    return null;
+  }
+};
 
 if (process.platform != "darwin" || process.arch != "arm64")
   throw new Error("scripts/installGraal.ts currently supports only macOS arm64.");
 
-if (existsSync(NativeImagePath))
+const installedMajorVersion = readNativeImageMajorVersion();
+if (installedMajorVersion == GraalMajorVersion)
   process.exit(0);
+if (installedMajorVersion != null)
+  throw new Error(
+    `Found GraalVM ${installedMajorVersion} in ${CurrentDir}. ` +
+    `Delete it manually before installing GraalVM ${GraalMajorVersion}.`,
+  );
 
 mkdirSync(CacheDir, { recursive: true });
 if (!existsSync(ArchivePath))

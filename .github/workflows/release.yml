@@ -196,7 +196,7 @@ jobs:
 
   publish:
     name: publish packages
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     needs:
       - build_kdts
       - build_linux
@@ -215,7 +215,13 @@ jobs:
           node-version: "24"
           package-manager-cache: false
           registry-url: "https://registry.npmjs.org"
-      - run: test "${GITHUB_REF_NAME#v}" = "$(node -p 'require("./package.json").version')"
+      - run: |
+          PACKAGE_VERSION="$(node -p 'require("./package.json").version')"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            test "${GITHUB_REF_NAME}" = "${{ github.event.repository.default_branch }}"
+          else
+            test "${GITHUB_REF_NAME#v}" = "${PACKAGE_VERSION}"
+          fi
       - uses: actions/download-artifact@v8
         with:
           name: kdts
@@ -242,3 +248,5 @@ jobs:
           chmod 755 build/gcc-macos/compiler
           chmod 755 build/gcc-windows/compiler.exe
       - run: bun run publish:packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

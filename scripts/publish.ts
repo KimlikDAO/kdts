@@ -18,6 +18,14 @@ type PackageJson = {
 const readPackageJson = (dir: string): PackageJson =>
   JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as PackageJson;
 
+const toBackendVersion = (version: string): string => {
+  const parts = version.split(".");
+  if (parts.length != 3)
+    throw new Error(`Expected semantic version x.y.z, got ${version}`);
+  parts[2] = "0";
+  return parts.join(".");
+};
+
 const encodePackageName = (packageName: string): string =>
   encodeURIComponent(packageName).replace(/^%40/, "@");
 
@@ -32,10 +40,15 @@ const isPackageVersionPublished = async (
 };
 
 const publishDir = async (dir: string) => {
+  const releaseVersion = readPackageJson(".").version;
+  const backendVersion = toBackendVersion(releaseVersion);
   const pkg = readPackageJson(dir);
   if (!dryRun && await isPackageVersionPublished(pkg.name, pkg.version)) {
-    console.info(`Skipping ${pkg.name}@${pkg.version}; already published.`);
-    return;
+    if (dir != BuildRootDir && releaseVersion != backendVersion) {
+      console.info(`Skipping ${pkg.name}@${pkg.version}; reusing published backend package.`);
+      return;
+    }
+    throw new Error(`${pkg.name}@${pkg.version} is already published.`);
   }
 
   const args = ["npm", "publish", "--access", "public"];

@@ -6,8 +6,28 @@ const BuiltCompilerJar = resolve("build", "compiler", "compiler.jar");
 const BazelCompilerJar = resolve("gcc", "bazel-bin", "compiler_uberjar_deploy.jar");
 const BazelOutputRoot = resolve(".cache", "bazel");
 
+const toBackendVersion = (version: string): string => {
+  const parts = version.split(".");
+  if (parts.length != 3)
+    throw new Error(`Expected semantic version x.y.z, got ${version}`);
+  parts[2] = "0";
+  return parts.join(".");
+};
+
+const resolveLocalJdkHome = (): string | "" => {
+  const candidates = [
+    resolve(".cache", "graalvm", "current", "Contents", "Home"),
+    resolve(".cache", "graalvm", "current", "Home"),
+    resolve(".cache", "graalvm", "current"),
+  ];
+  return candidates.find((path) => existsSync(resolve(path, "bin", "java"))) || "";
+};
+
 const getBazelStartupOptions = (): string[] => {
-  const serverJavabase = process.env["BAZEL_SERVER_JAVABASE"] || process.env["JAVA_HOME"];
+  const serverJavabase =
+    process.env["BAZEL_SERVER_JAVABASE"]
+    || process.env["JAVA_HOME"]
+    || resolveLocalJdkHome();
   if (!serverJavabase)
     return [];
   return [`--server_javabase=${serverJavabase}`];
@@ -20,11 +40,12 @@ const copyCompilerJar = (jarPath: string): string => {
 };
 
 const readCompilerVersion = (packageVersion: string): string => {
+  const backendVersion = toBackendVersion(packageVersion);
   try {
     const revision = capture(["git", "-C", "gcc", "rev-parse", "--short=12", "HEAD"]);
-    return `kdts-${packageVersion}-${revision}`;
+    return `kdts-${backendVersion}-${revision}`;
   } catch {
-    return `kdts-${packageVersion}`;
+    return `kdts-${backendVersion}`;
   }
 };
 
