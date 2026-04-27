@@ -3,10 +3,8 @@ import { fileURLToPath } from "node:url";
 import { DiskProgram } from "../model/program";
 import {
   getNativeCompilerFile,
-  getNativeCompilerBuildDir,
   getNativeCompilerPackage,
   getNativeCompilerPackageName,
-  getStockCompilerPackageName,
 } from "./nativePackages";
 
 const JavaRuntimeArgs = [
@@ -17,12 +15,7 @@ const JavaRuntimeArgs = [
 type Executable = {
   cmd: string[];
   platform: "native" | "java";
-  source: "npm-kdts-gcc" | "local-kdts-gcc" | "stock-gcc";
-};
-
-type ResolvedPackage = {
-  path: string;
-  source?: "local-kdts-gcc";
+  source: "kdts-package";
 };
 
 const findFile = (...paths: (string | null)[]): string | null =>
@@ -39,23 +32,6 @@ const findRuntimePackage = (path: string): string | null => {
 const fromModule = (path: string): string =>
   fileURLToPath(new URL(path, import.meta.url));
 
-const findPackage = (
-  runtimePath: string,
-  buildPath?: string,
-): ResolvedPackage | null => {
-  const resolvedRuntimePath = findRuntimePackage(runtimePath);
-  if (resolvedRuntimePath)
-    return { path: resolvedRuntimePath };
-
-  if (!buildPath)
-    return null;
-
-  const resolvedBuildPath = findFile(fromModule(`../../${buildPath}`));
-  if (resolvedBuildPath)
-    return { path: resolvedBuildPath, source: "local-kdts-gcc" };
-  return null;
-};
-
 const getJavaCommand = (javaJarPath: string): string[] =>
   ["java", ...JavaRuntimeArgs, "-jar", javaJarPath];
 
@@ -68,28 +44,16 @@ const getNativeExecutable = (
     return null;
 
   const compilerFile = getNativeCompilerFile(nativePackage);
-  const kdtsNativeImage = findPackage(
+  const kdtsNativeImage = findRuntimePackage(
     `${getNativeCompilerPackageName(nativePackage)}/${compilerFile}`,
-    `${getNativeCompilerBuildDir(nativePackage)}/${compilerFile}`,
   );
   if (kdtsNativeImage)
     return {
-      cmd: [kdtsNativeImage.path],
+      cmd: [kdtsNativeImage],
       platform: "native",
-      source: kdtsNativeImage.source || "npm-kdts-gcc",
+      source: "kdts-package",
     };
-
-  const stockNativeImage = findPackage(
-    `${getStockCompilerPackageName(nativePackage)}/${compilerFile}`,
-  );
-  if (!stockNativeImage)
-    return null;
-
-  return {
-    cmd: [stockNativeImage.path],
-    platform: "native",
-    source: stockNativeImage.source || "stock-gcc",
-  };
+  return null;
 };
 
 const getJavaExecutable = (): Executable => {
@@ -98,28 +62,21 @@ const getJavaExecutable = (): Executable => {
     return {
       cmd: getJavaCommand(kdtsJavaJarPath),
       platform: "java",
-      source: "npm-kdts-gcc",
+      source: "kdts-package",
     };
 
-  const localJavaJarPath = findFile(
-    fromModule("../../build/compiler/compiler.jar"),
-    fromModule("../../gcc/bazel-bin/compiler_uberjar_deploy.jar"),
+  const installedJavaJarPath = findRuntimePackage(
+    "@kimlikdao/kdts/compiler.jar",
   );
-  if (localJavaJarPath)
+  if (installedJavaJarPath)
     return {
-      cmd: getJavaCommand(localJavaJarPath),
+      cmd: getJavaCommand(installedJavaJarPath),
       platform: "java",
-      source: "local-kdts-gcc",
+      source: "kdts-package",
     };
-
-  const stockJavaJarPath = findPackage("google-closure-compiler-java/compiler.jar");
-  if (!stockJavaJarPath)
-    throw new Error("No Closure Compiler jar found in node_modules.");
-  return {
-    cmd: getJavaCommand(stockJavaJarPath.path),
-    platform: "java",
-    source: stockJavaJarPath.source || "stock-gcc",
-  };
+  throw new Error(
+    "No @kimlikdao/kdts compiler.jar found. Build and stage kdts, or install a published @kimlikdao/kdts package.",
+  );
 };
 
 const createCompilerArgs = (
