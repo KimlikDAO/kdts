@@ -5,9 +5,10 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import {
   getNativeCompilerBuildDir,
   getNativeCompilerFile,
@@ -148,6 +149,22 @@ const writeBuildPackageJson = (
   writeFileSync(path, JSON.stringify(packageJson, null, 2) + "\n");
 };
 
+const stageBuiltPackage = (packageName: string, buildDir: string) => {
+  const [, scopeName = "", packageId = ""] = packageName.match(/^(@[^/]+)\/(.+)$/) || [];
+  if (!scopeName || !packageId)
+    throw new Error(`Expected a scoped package name, got ${packageName}`);
+
+  const scopeDir = join("node_modules", scopeName);
+  const linkPath = join(scopeDir, packageId);
+  mkdirSync(scopeDir, { recursive: true });
+  rmSync(linkPath, { recursive: true, force: true });
+  symlinkSync(
+    relative(scopeDir, resolve(buildDir)),
+    linkPath,
+    process.platform == "win32" ? "junction" : "dir",
+  );
+};
+
 const makeNativePackageJson = (
   rootPackageJson: RootPackageJson,
   nativePackage: NativeCompilerPackage,
@@ -197,6 +214,7 @@ const buildRootPackage = (
     command.push("--override", "Source=npm");
   run(command);
   chmodSync(join(RootBuildDir, "kdts.js"), 0o755);
+  stageBuiltPackage(packageJson.name, RootBuildDir);
 };
 
 const writeNativePackageJson = (
@@ -229,6 +247,7 @@ const buildCurrentNativePackage = (
   } finally {
     rmSync(nativeCompilerJar, { force: true });
   }
+  stageBuiltPackage(getNativeCompilerPackageName(nativePackage), buildDir);
 };
 
 const rootPackageJson = readRootPackageJson();

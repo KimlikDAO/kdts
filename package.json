@@ -2,7 +2,7 @@
   "name": "@kimlikdao/kdts",
   "description": "KimlikDAO TypeScript compiler",
   "author": "KimlikDAO <dao@kimlikdao.org>",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "license": "MIT",
   "keywords": [
     "typescript",
@@ -27,7 +27,6 @@
   },
   "types": "./kdts/kdts.d.ts",
   "scripts": {
-    "postinstall": "bun ./scripts/postinstall.ts",
     "install:graal": "bun ./scripts/installGraal.ts",
     "build:local": "bun ./scripts/build.ts --local",
     "build:compiler": "bun ./scripts/build.ts --compiler-only",
@@ -37,13 +36,13 @@
     "release": "bun ./scripts/publish.ts"
   },
   "dependencies": {
-    "@swc/core": "^1.15.30",
+    "@swc/core": "^1.15.32",
     "acorn": "^8.16.0",
     "uglify-js": "3.19.3"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.13",
-    "google-closure-compiler": "^20260422.0.0"
+    "@kimlikdao/kdts": "0.2.1",
+    "@types/bun": "^1.3.13"
   },
   "bin": {
     "kdts": "kdts/kdts.js"

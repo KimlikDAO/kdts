@@ -1,13 +1,9 @@
-import { existsSync } from "node:fs";
+import { spawn } from "bun";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DiskProgram } from "../model/program";
-import {
-  getNativeCompilerFile,
-  getNativeCompilerBuildDir,
-  getNativeCompilerPackage,
-  getNativeCompilerPackageName,
-  getStockCompilerPackageName,
-} from "./nativePackages";
+import { getNativePackageCompiler } from "./nativePackages";
 
 const JavaRuntimeArgs = [
   "-XX:+IgnoreUnrecognizedVMOptions",
@@ -17,115 +13,76 @@ const JavaRuntimeArgs = [
 type Executable = {
   cmd: string[];
   platform: "native" | "java";
-  source: "npm-kdts-gcc" | "local-kdts-gcc" | "stock-gcc";
+  version: string;
 };
 
-type ResolvedPackage = {
+type PackageFile = {
   path: string;
-  source?: "local-kdts-gcc";
+  version: string;
 };
 
-const findFile = (...paths: (string | null)[]): string | null =>
-  paths.find((path): path is string => !!path && existsSync(path)) || null;
-
-const findRuntimePackage = (path: string): string | null => {
+const getFileFromPackage = (
+  packageName: string | null,
+  file: string,
+): PackageFile | null => {
   try {
-    return fileURLToPath(import.meta.resolve(path));
+    const packageJsonPath = packageName
+      ? fileURLToPath(import.meta.resolve(`${packageName}/package.json`))
+      : fileURLToPath(new URL("./package.json", import.meta.url));
+    const packageFilePath = join(dirname(packageJsonPath), file);
+    if (!existsSync(packageFilePath))
+      return null;
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+      version?: unknown;
+    };
+    if (typeof packageJson.version != "string" || !packageJson.version)
+      throw new Error(`Missing package.json version in ${packageJsonPath}`);
+    return {
+      path: packageFilePath,
+      version: packageJson.version,
+    };
   } catch {
     return null;
   }
 };
 
-const fromModule = (path: string): string =>
-  fileURLToPath(new URL(path, import.meta.url));
-
-const findPackage = (
-  runtimePath: string,
-  buildPath?: string,
-): ResolvedPackage | null => {
-  const resolvedRuntimePath = findRuntimePackage(runtimePath);
-  if (resolvedRuntimePath)
-    return { path: resolvedRuntimePath };
-
-  if (!buildPath)
-    return null;
-
-  const resolvedBuildPath = findFile(fromModule(`../../${buildPath}`));
-  if (resolvedBuildPath)
-    return { path: resolvedBuildPath, source: "local-kdts-gcc" };
-  return null;
-};
-
-const getJavaCommand = (javaJarPath: string): string[] =>
-  ["java", ...JavaRuntimeArgs, "-jar", javaJarPath];
-
 const getNativeExecutable = (
   platform = process.platform,
   arch = process.arch,
 ): Executable | null => {
-  const nativePackage = getNativeCompilerPackage(platform, arch);
-  if (!nativePackage)
+  const native = getNativePackageCompiler(platform, arch);
+  if (!native)
     return null;
-
-  const compilerFile = getNativeCompilerFile(nativePackage);
-  const kdtsNativeImage = findPackage(
-    `${getNativeCompilerPackageName(nativePackage)}/${compilerFile}`,
-    `${getNativeCompilerBuildDir(nativePackage)}/${compilerFile}`,
+  const kdtsNativeImage = getFileFromPackage(
+    native.package,
+    native.compiler,
   );
-  if (kdtsNativeImage)
-    return {
-      cmd: [kdtsNativeImage.path],
-      platform: "native",
-      source: kdtsNativeImage.source || "npm-kdts-gcc",
-    };
-
-  const stockNativeImage = findPackage(
-    `${getStockCompilerPackageName(nativePackage)}/${compilerFile}`,
-  );
-  if (!stockNativeImage)
-    return null;
-
-  return {
-    cmd: [stockNativeImage.path],
+  return kdtsNativeImage && {
+    cmd: [kdtsNativeImage.path],
     platform: "native",
-    source: stockNativeImage.source || "stock-gcc",
+    version: kdtsNativeImage.version,
   };
 };
 
 const getJavaExecutable = (): Executable => {
-  const kdtsJavaJarPath = findFile(fromModule("./compiler.jar"));
-  if (kdtsJavaJarPath)
-    return {
-      cmd: getJavaCommand(kdtsJavaJarPath),
-      platform: "java",
-      source: "npm-kdts-gcc",
-    };
-
-  const localJavaJarPath = findFile(
-    fromModule("../../build/compiler/compiler.jar"),
-    fromModule("../../gcc/bazel-bin/compiler_uberjar_deploy.jar"),
-  );
-  if (localJavaJarPath)
-    return {
-      cmd: getJavaCommand(localJavaJarPath),
-      platform: "java",
-      source: "local-kdts-gcc",
-    };
-
-  const stockJavaJarPath = findPackage("google-closure-compiler-java/compiler.jar");
-  if (!stockJavaJarPath)
-    throw new Error("No Closure Compiler jar found in node_modules.");
+  const javaJar = getFileFromPackage(null, "compiler.jar")
+    || getFileFromPackage("@kimlikdao/kdts", "compiler.jar");
+  if (!javaJar)
+    throw new Error(
+      "No @kimlikdao/kdts compiler.jar found. Build and stage kdts, or install a published @kimlikdao/kdts package.",
+    );
   return {
-    cmd: getJavaCommand(stockJavaJarPath.path),
+    cmd: ["java", ...JavaRuntimeArgs, "-jar", javaJar.path],
     platform: "java",
-    source: stockJavaJarPath.source || "stock-gcc",
+    version: javaJar.version,
   };
 };
 
-const createCompilerArgs = (
+const createClosureCompilerCommand = (
   program: DiskProgram,
-  params: ClosureCompilerParams
-): string[] => {
+  params: ClosureCompilerParams,
+): Executable => {
+  const exec = getNativeExecutable() || getJavaExecutable();
   const args = program.sources.slice();
   args.push(
     "--compilation_level=ADVANCED",
@@ -149,15 +106,7 @@ const createCompilerArgs = (
   if (program.entry)
     args.push(`--entry_point=${program.entry}`);
 
-  return args;
-};
-
-const createClosureCompilerCommand = (
-  program: DiskProgram,
-  params: ClosureCompilerParams,
-): Executable => {
-  const exec = getNativeExecutable() || getJavaExecutable();
-  exec.cmd.push(...createCompilerArgs(program, params));
+  exec.cmd.push(...args);
   return exec;
 };
 
@@ -170,22 +119,25 @@ const compileWithClosureCompiler = async (
   program: DiskProgram,
   params: ClosureCompilerParams,
 ): Promise<string> => {
-  const { cmd, platform, source } = createClosureCompilerCommand(program, params);
+  const { cmd, platform, version } = createClosureCompilerCommand(program, params);
   console.info(
     "GCC isolate:   ",
     program.isolateDir,
     `(for ${program.entry})`
   );
-  console.info(`GCC platform:   ${platform} (${source})`);
+  console.info(`GCC platform:   ${platform} (${version})`);
 
-  const proc = Bun.spawnSync({
+  const proc = spawn({
     cmd,
     cwd: program.isolateDir,
-    stdout: "pipe"
+    stdout: "pipe",
+    stderr: "pipe",
   });
-  const output = proc.stdout.toString();
-  const errors = proc.stderr.toString();
-  const exitCode = proc.exitCode;
+  const [output, errors, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
 
   if (exitCode || errors)
     throw `${cmd.join(" ")}\n\n${errors || exitCode}\n\n`;
